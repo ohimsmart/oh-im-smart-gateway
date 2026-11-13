@@ -217,7 +217,6 @@
   .tips .card + .card { margin-top: 0; }
   .tip b { display: block; font-size: 14px; margin-bottom: 6px; }
   .tip .say { font-size: 13px; }
-  .tip .say::before { content: "你："; color: var(--muted); }
   .tip .res { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .tip .res::before { content: "→ "; color: var(--accent); }
   details.prompt-all > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 14px 22px; }
@@ -618,13 +617,13 @@ async function renderHow(root) {
   const f = d.flow, p = d.prompt, m = p.marks;
   const markRe = new RegExp(`${m.start}(\\w+)${m.sep}([\\s\\S]*?)${m.end}`, "g");
   const highlight = (text) => esc(text).replace(markRe, (_, name, value) => {
-    const label = p.var_labels[name] || name;
+    const label = UII18n.text(p.var_labels[name] || name);
     if (name === "base_prompt") return `<mark class="persona"><i>${esc(label)}</i>${value}</mark>`;
     return value.trim() ? `<mark title="${esc(name)}"><i>${esc(label)}</i>${value}</mark>` : `<mark title="${esc(name)}"><i>${esc(label)}</i>（${UII18n.t("空）")}</mark>`;
   });
   const plain = (text) => text.replace(markRe, (_, name, value) => value);
   const stage = (s) => {
-    const body = `<div class="ico">${s.icon}</div><b>${esc(s.title)}</b><span class="mod">${esc(s.value)}</span><small>${esc(s.hint)}</small>`;
+    const body = `<div class="ico">${s.icon}</div><b>${esc(UII18n.text(s.title))}</b><span class="mod">${esc(UII18n.text(s.value))}</span><small>${esc(UII18n.text(s.hint))}</small>`;
     return s.page ? `<button class="stage" data-go="${esc(s.page)}" title="${UII18n.t("去设置")}">${body}</button>` : `<div class="stage static">${body}</div>`;
   };
   root.innerHTML = `
@@ -633,19 +632,19 @@ async function renderHow(root) {
     <div class="flow">${f.stages.map((s, i) => `${i ? '<span class="arrow">→</span>' : ""}${stage(s)}`).join("")}</div>
 
     <div class="section-title">${UII18n.t("怎么跟它说话")}</div>
-    <div class="tips">${f.tips.map((t) => `<div class="card tip"><b>${esc(t.title)}</b>
-      <div class="say">${esc(t.say)}</div><div class="res">${esc(t.result)}</div></div>`).join("")}</div>
+    <div class="tips">${f.tips.map((t) => `<div class="card tip"><b>${esc(UII18n.text(t.title))}</b>
+      <div class="say"><span class="muted">${UII18n.t("你：")}</span>${esc(UII18n.text(t.say))}</div><div class="res">${esc(UII18n.text(t.result))}</div></div>`).join("")}</div>
 
     <div class="section-title">${UII18n.t("发给大模型的提示词")} <span class="muted small" style="font-weight:400">${UII18n.t("调人设、排查回答不对劲时用得上")}</span></div>
     <details class="prompt-all">
-      <summary class="card"><b>${UII18n.t("发给")} ${esc(p.llm)} ${UII18n.t("的内容")}</b><span class="pill">${p.segments.length} ${UII18n.t("段，按顺序拼在一起")}</span>
+      <summary class="card"><b>${UII18n.t("发给")} ${esc(UII18n.text(p.llm))} ${UII18n.t("的内容")}</b><span class="pill">${p.segments.length} ${UII18n.t("段，按顺序拼在一起")}</span>
         <span class="toggle">${UII18n.t("展开 / 收起")}</span></summary>
-      ${p.warnings.map((w) => `<div class="banner warn">${esc(w)}</div>`).join("")}
+      ${p.warnings.map((w) => `<div class="banner warn">${esc(UII18n.text(w))}</div>`).join("")}
       ${p.segments.map((s, i) => `<details class="card seg-card pseg" ${s.collapsed ? "" : "open"}>
-        <summary class="seg-head"><span class="no">${i + 1}</span><b>${esc(s.title)}</b>
-          <span class="pill ${SOURCE_PILL[s.source] ?? ""}">${UII18n.t("来源：")}${esc(s.source)}</span><span class="pill">${esc(s.when)}</span>
+        <summary class="seg-head"><span class="no">${i + 1}</span><b>${esc(UII18n.text(s.title))}</b>
+          <span class="pill ${SOURCE_PILL[s.source] ?? ""}">${UII18n.t("来源：")}${esc(UII18n.text(s.source))}</span><span class="pill">${esc(UII18n.text(s.when))}</span>
           <span class="toggle">${UII18n.t("展开 / 收起")}</span></summary>
-        <p class="seg-note">${esc(s.note)}</p>
+        <p class="seg-note">${esc(UII18n.text(s.note))}</p>
         ${s.text ? `<pre class="prompt-text">${highlight(s.text)}</pre>
           <div class="actions" style="margin:0;padding:0 22px 14px"><button class="btn sm" data-copyseg="${i}">${UII18n.t("复制这段")}</button></div>` : ""}
       </details>`).join("")}
