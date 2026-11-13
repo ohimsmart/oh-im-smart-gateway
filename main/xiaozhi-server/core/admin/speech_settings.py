@@ -41,7 +41,7 @@ def describe(section, merged):
     key = entry.get('api_key')
     result = {'entry': spec['entry'], 'base_url': endpoint.removesuffix(spec['endpoint']),
               'model': entry.get(spec['model_field']) or spec['model'],
-              'key_set': not config_store.is_placeholder(key), 'key_hint': config_store.mask_key(key),
+              'key_set': not config_store.is_placeholder(key), **config_store.masked_fields('key_hint', key),
               'conflict': bool(entry) and entry.get('type') != 'openai'}
     result['api_protocol'] = entry.get('api_protocol') or 'openai'
     result['configured'] = result['key_set'] and not result['conflict']

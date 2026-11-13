@@ -195,6 +195,16 @@ def model_label(name: str) -> str:
     return vendor["label"] if vendor else name
 
 
+def model_label_msg(name: str) -> dict:
+    """model_label() 给后台页面用的 msg 物件：厂商标签要翻译；Claude、Bot 名称、条目名是名字，原样显示
+    （条目名可能恰好和字典里的词一样，例如叫「默认」）。"""
+    from core.admin import catalog
+    from core.admin.i18n_msg import label, msg
+
+    vendor = catalog.VENDOR_BY_ENTRY.get(name)
+    return label(vendor["label"]) if vendor else msg("{value}", value=model_label(name))
+
+
 def _retire(instance) -> None:
     if callable(getattr(instance, "shutdown", None)):
         try:

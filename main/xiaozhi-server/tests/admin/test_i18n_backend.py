@@ -156,3 +156,12 @@ def test_message_keys_are_literals():
            for call in key_calls(root)
            if not (call.args and isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str))]
     assert not bad, bad
+
+
+def test_model_label_msg_translates_only_vendor_labels():
+    from core.admin import catalog
+    from core.agent import llm_router
+    vendor = catalog.LLM_VENDORS[0]
+    assert llm_router.model_label_msg(vendor["entry"]) == {"msg_key": vendor["label"], "msg_params": {}}
+    # 条目名是配置里的名字：恰好和字典里的词一样也原样显示
+    assert llm_router.model_label_msg("默认") == {"msg_key": "{value}", "msg_params": {"value": "默认"}}

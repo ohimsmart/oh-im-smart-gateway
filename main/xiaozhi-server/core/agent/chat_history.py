@@ -543,7 +543,8 @@ def describe_memories(config: dict) -> list:
     for device in store.memory_devices():
         counts = store._exec("SELECT model, COUNT(*) FROM messages WHERE device=? GROUP BY model", (device,)).fetchall()
         out.append({"device": device, "memory": store.memory(device),
-                    "models": [{"entry": m, "label": llm_router.model_label(m), "count": n, "agent": is_agent(config, m)}
+                    "models": [{"entry": m, "label": llm_router.model_label(m), "label_msg": llm_router.model_label_msg(m),
+                                "count": n, "agent": is_agent(config, m)}
                                for m, n in counts]})
     return out
 

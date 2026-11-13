@@ -1,0 +1,33 @@
+# 頁面上刻意原樣顯示的運算式：只收用戶的值、數字、代碼、時間和提示詞、對話原文；我們的句子和 catalog 標籤不能放進來。
+# 格式：運算式<TAB>原因。比對的是運算式文字，整頁共用：同名運算式在別處顯示我們的句子時要改名或改成 UII18n.text()。
+e.message	JavaScript Error 的訊息：api() 和頁面丟出時已經經過 UII18n 翻譯
+err.message	JavaScript Error 的訊息：api() 和頁面丟出時已經經過 UII18n 翻譯
+esc(msg)	bad(msg) 收到的是 err.message：丟出時已經翻譯
+esc(label)	已翻譯的標籤：highlight() 的變數標籤（UII18n.text 的結果）、插件設定標題（data-label 已經 UII18n.text）
+esc(value)	狀態頁模組格的值（已翻譯的意圖名稱或配置裏的條目名）；記憶頁的記憶全文（對話內容）
+esc(detail)	狀態頁模組格的說明：已翻譯的音色名稱、配置裏的條目名或類型代碼
+esc(current)	大模型頁的「默认：」：已翻譯的廠商標籤加模型名稱、Bot 名稱或條目名
+esc(v)	連接地址：IP 和網址
+esc(text)	提示詞原文（發給大模型的文字）
+esc(name)	提示詞變數名稱（程式碼）
+s.source	SOURCE_PILL 的查表鍵，不顯示（顯示的那一處經 UII18n.text）
+m.source	記憶來源的查表鍵（SOURCE），不顯示
+o.value	選項的代碼值（模型 id、思考級別、語言代碼）
+lv.value	權限級別的代碼值
+r.value	豆包資源 ID（代碼）
+v.value	EdgeTTS 音色 id（代碼）
+i.value	本地識別的模型目錄、模型類型：配置裏的值
+esc(t)	Claude Code 的工具名稱（代碼）
+esc(m)	廠商的模型名稱（datalist 選項）
+esc(w)	用戶填的熱詞
+esc(a)	用戶填的稱呼、認錯的寫法
+esc(n)	用戶填的 MCP 伺服器名稱
+p.name	插件的函式名稱（代碼）
+f.value	用戶填的插件設定值
+b.name	Grok Bot 的名稱（用戶在 Grok Bot App 裏取的）
+ta.value	編輯框內容的字數（數字）
+esc(time(x.time))	時間
+esc(fmt(m.updated))	時間
+esc(fmtTime(c.date))	時間
+esc(fmtTime(c.checked_at))	時間
+esc(when)	時間

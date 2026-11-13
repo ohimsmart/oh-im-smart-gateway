@@ -338,6 +338,12 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+// 用「、」把几项接起来（每项原样显示）；对半折叠，同 pipeline._join，嵌套深度是 log n
+function joinList(items) {
+  if (items.length <= 1) return items.length ? String(items[0]) : "";
+  const half = items.length >> 1;
+  return UII18n.msg({ msg_key: "{a}、{b}", msg_params: { a: joinList(items.slice(0, half)), b: joinList(items.slice(half)) } });
+}
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function toast(msg, isError, ms) {
@@ -514,7 +520,7 @@ async function renderStatus(root) {
   const voice = tts.voices.find((v) => v.value === tts.voice);
   const tiles = Object.entries(s.modules).map(([k, m]) => {
     const value = k === "Intent" ? (INTENT_LABEL[m.type] || m.selected) : m.selected;
-    const detail = k === "TTS" && voice ? `${UII18n.t("音色：")}${voice.name}` : k === "Intent" ? m.selected : m.type;
+    const detail = k === "TTS" && voice ? `${UII18n.t("音色：")}${UII18n.text(voice.name)}` : k === "Intent" ? m.selected : m.type;
     return `<button class="card tile" data-go="${MODULE_PAGES[k]}">
       <div class="k">${MODULE_TITLES[k]}</div><div class="v">${esc(value)}</div>
       <div class="d">${m.running && m.running !== m.selected ? `<span class="pill warn">${UII18n.t("运行中仍是")} ${esc(m.running)}</span>` : esc(detail)}</div></button>`;
@@ -535,7 +541,7 @@ async function renderStatus(root) {
         <button class="btn sm copy" data-copy="${esc(v)}">${UII18n.t("复制")}</button>`).join("")}</div>
     </div>
     <div class="section-title">${UII18n.t("环境自检")} ${bad ? `<span class="pill warn">${bad} ${UII18n.t("项需要注意")}</span>` : UII18n.t("<span class=\"pill ok\">全部正常</span>")}</div>
-    <div class="card rows">${s.checks.map((c) => `<div><b>${esc(c.name)}</b>${levelPill[c.level] || ""}<span class="muted">${esc(c.detail)}</span></div>`).join("")}</div>`;
+    <div class="card rows">${s.checks.map((c) => `<div><b>${esc(UII18n.text(c.name))}</b>${levelPill[c.level] || ""}<span class="muted">${esc(UII18n.text(c.detail_msg || c.detail))}</span></div>`).join("")}</div>`;
   root.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => openPage(b.dataset.go)));
   root.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => copyText(b.dataset.copy)));
   $("refresh").onclick = (e) => busy(e.target, () => openPage("status", true));
@@ -582,12 +588,12 @@ function renderDevices(dev) {
       : t.stopped ? `${UII18n.t("已停止（播放到第")} ${t.index}/${t.total} ${UII18n.t("个）。")}` : UII18n.t("依次播放已结束。");
     return `<div class="device" data-sid="${esc(d.session_id)}">
       <div class="device-top"><span class="dot on"></span><b class="mono">${esc(d.device_id || UII18n.t("未知设备"))}</b>
-        ${d.model_label ? `<span class="pill" title="${UII18n.t("这台设备此刻在跟谁说话（叫称呼切换）；和大模型页的全局默认是两回事")}">${UII18n.t("当前：")}${esc(d.model_label)}</span>` : ""}
+        ${UII18n.text(d.model_label_msg) ? `<span class="pill" title="${UII18n.t("这台设备此刻在跟谁说话（叫称呼切换）；和大模型页的全局默认是两回事")}">${UII18n.t("当前：")}${esc(UII18n.text(d.model_label_msg))}</span>` : ""}
         <span class="muted small">${esc(d.ip || "")}</span><span class="muted small" data-since="${d.connected_at}">${duration(dev.now - d.connected_at)}</span>
         <button class="btn sm" data-act="toggle" style="margin-left:auto">${open ? UII18n.t("收起") : UII18n.t("表情测试")}</button></div>
       ${open ? `<p class="muted small" style="margin:10px 0 0">${progress}</p>
         <div class="emogrid">${dev.emotions.map((e) => `<button class="emo ${running && t.emotion === e.emotion ? "now" : ""}" data-emo="${e.emotion}">
-          <span>${e.emoji}</span><small>${esc(e.label)}</small></button>`).join("")}</div>
+          <span>${e.emoji}</span><small>${esc(UII18n.text(e.label))}</small></button>`).join("")}</div>
         <div class="actions" style="justify-content:flex-start">
           <button class="btn sm primary" data-act="all" ${running ? "disabled" : ""}>${UII18n.t("依次播放全部（每个 2 秒）")}</button>
           <button class="btn sm" data-act="stop" ${running ? "" : "disabled"}>${UII18n.t("停止")}</button></div>` : ""}
@@ -619,7 +625,7 @@ async function renderHow(root) {
   const highlight = (text) => esc(text).replace(markRe, (_, name, value) => {
     const label = UII18n.text(p.var_labels[name] || name);
     if (name === "base_prompt") return `<mark class="persona"><i>${esc(label)}</i>${value}</mark>`;
-    return value.trim() ? `<mark title="${esc(name)}"><i>${esc(label)}</i>${value}</mark>` : `<mark title="${esc(name)}"><i>${esc(label)}</i>（${UII18n.t("空）")}</mark>`;
+    return value.trim() ? `<mark title="${esc(name)}"><i>${esc(label)}</i>${value}</mark>` : `<mark title="${esc(name)}"><i>${esc(label)}</i>${UII18n.t("（空）")}</mark>`;
   });
   const plain = (text) => text.replace(markRe, (_, name, value) => value);
   const stage = (s) => {
@@ -654,8 +660,7 @@ async function renderHow(root) {
         <pre class="prompt-text">${esc(p.actual.text)}</pre></details>` : ""}
     </details>
 
-    <p class="how-foot">${UII18n.t("每一步为什么这样设计、连接和 Claude Code 进程什么时候启动和关闭、哪些记录会保存，见 GitHub 上的")}
-      <a href="${esc(d.design_url)}" target="_blank" rel="noopener">${UII18n.t("设计细节 ↗")}</a>。</p>`;
+    <p class="how-foot">${UII18n.msg({ msg_key: "每一步为什么这样设计、连接和 Claude Code 进程什么时候启动和关闭、哪些记录会保存，见 GitHub 上的<a href=\"{url}\" target=\"_blank\" rel=\"noopener\">设计细节 ↗</a>。", msg_params: { url: esc(d.design_url) } })}</p>`;
   root.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => openPage(b.dataset.go)));
   root.querySelectorAll("[data-copyseg]").forEach((b) => (b.onclick = () => copyText(plain(p.segments[+b.dataset.copyseg].text))));
 }
@@ -671,12 +676,12 @@ async function renderLLM(root) {
   if (!llmVendor || !d.vendors.find((x) => x.id === llmVendor)) {
     llmVendor = d.vendor || (d.vendors.find((x) => x.configured) || d.vendors[0]).id;
   }
-  const current = usingCli ? `Claude Code · ${v.model || UII18n.t("默认模型")}` : d.kind === "grok" && d.grok.selected ? `Grok Bot · ${d.grok.selected.bot_name}` : active ? `${active.label} · ${active.model}` : d.selected;
+  const current = usingCli ? `Claude Code · ${v.model || UII18n.t("默认模型")}` : d.kind === "grok" && d.grok.selected ? `Grok Bot · ${d.grok.selected.bot_name}` : active ? `${UII18n.text(active.label)} · ${active.model}` : d.selected;
   const customModel = !!v.model && !c.options.model.find((o) => o.value === v.model);
   const num = (name, label, hint) => `<label class="f">${label}${hint ? `<span class="hint">${hint}</span>` : ""}
     <input class="in" data-k="${name}" value="${esc(v[name] ?? "")}" inputmode="decimal"></label>`;
   // "默认"只是设备刚连上时用的模型；配了称呼的模型随时能叫到，所以每个模型都标出它的称呼
-  const callPill = (entry) => d.call_names_enabled && d.callable[entry] ? `<span class="pill" title="${UII18n.t("说“嗨 + 称呼”就换成它")}">${UII18n.t("称呼：")}${esc(d.callable[entry].slice(0, 3).join("、"))}${d.callable[entry].length > 3 ? "…" : ""}</span>` : "";
+  const callPill = (entry) => d.call_names_enabled && d.callable[entry] ? `<span class="pill" title="${UII18n.t("说“嗨 + 称呼”就换成它")}">${UII18n.t("称呼：")}${esc(joinList(d.callable[entry].slice(0, 3)))}${d.callable[entry].length > 3 ? "…" : ""}</span>` : "";
   const defaultPill = (on) => (on ? UII18n.t("<span class=\"pill ok\">默认模型</span>") : "");
   const grokAliases = d.grok.bots.flatMap((g) => (d.callable[g.entry] || []).slice(0, 1));
 
@@ -684,14 +689,14 @@ async function renderLLM(root) {
     <div class="page-head"><div><h1>${UII18n.t("大模型")}</h1><p class="sub">${UII18n.t("设备刚连上时用默认模型。给模型配了称呼后，句子开头说“嗨 + 称呼”就换成它，几个模型可以同时用（称呼在")}<a href="#calls">${UII18n.t("呼名")}</a>${UII18n.t("页配）。")}</p></div>
       <span class="pill ${d.kind === "other" ? "warn" : "ok"}">${UII18n.t("默认：")}${esc(current)}</span></div>
     ${d.kind === "other" ? `<div class="banner warn">${UII18n.t("当前默认的")} ${esc(d.selected)} ${UII18n.t("不在后台管理范围内（可能是手动改了配置文件）。在下面选择一种并点")}"${UII18n.t("保存并设为默认")}"${UII18n.t("即可切换。")}</div>` : ""}
-    ${d.running && d.running !== d.selected ? `<div class="banner warn">${UII18n.t("配置里的默认模型是")} ${esc(d.selected)}，${UII18n.t("但服务仍在用")} ${esc(d.running)}。</div>` : ""}
+    ${d.running && d.running !== d.selected ? `<div class="banner warn">${esc(UII18n.msg({ msg_key: "配置里的默认模型是 {selected}，但服务仍在用 {running}。", msg_params: { selected: d.selected, running: d.running } }))}</div>` : ""}
 
     <div class="section-title">${UII18n.t("本地 CLI 与智能体 · 用你自己的账号，不走下面的 API Key")}</div>
     <div class="choices three">
       <div class="choice ${usingCli ? "on" : ""}">
         <div class="mark" style="background:#fef3c7;color:#b45309">C</div>
         <div><b>Claude Code CLI</b> ${defaultPill(usingCli)} ${callPill("ClaudeCLI")}
-          <small>${inst.installed ? esc(`${inst.version} · ${inst.path}`) : UII18n.t("<span style=\"color:var(--err)\">没有找到 Claude Code，请先安装并登录</span>")}</small></div>
+          <small>${inst.installed ? esc(`${UII18n.text(inst.version_msg || inst.version)} · ${inst.path}`) : UII18n.t("<span style=\"color:var(--err)\">没有找到 Claude Code，请先安装并登录</span>")}</small></div>
       </div>
       <div class="choice off" title="${UII18n.t("即将支持")}">
         <div class="mark" style="background:var(--soft);color:var(--muted)">X</div>
@@ -699,26 +704,28 @@ async function renderLLM(root) {
       </div>
       <div class="choice ${d.kind === "grok" ? "on" : ""}" id="grok-choice" style="cursor:pointer" title="${UII18n.t("打开 Grok Bot 页")}">
         <div class="mark" style="background:#e0f2fe;color:#0369a1">G</div>
-        <div><b>Grok Bot</b> ${defaultPill(d.kind === "grok")} ${grokAliases.length ? `<span class="pill">${UII18n.t("称呼：")}${esc(grokAliases.slice(0, 3).join("、"))}${grokAliases.length > 3 ? "…" : ""}</span>` : ""}
-          <small>${d.grok.bots.length ? `${UII18n.t("已勾选")} ${d.grok.bots.length} ${UII18n.t("个 Bot")}${grokAliases.length < d.grok.bots.length ? UII18n.t("，有的还没配称呼") : ""}，${UII18n.t("叫名字就能派活")}` : UII18n.t("xAI 的云端 AI 同事：登录、勾选 Bot，叫名字派活，回复念给你听")}</small></div>
+        <div><b>Grok Bot</b> ${defaultPill(d.kind === "grok")} ${grokAliases.length ? `<span class="pill">${UII18n.t("称呼：")}${esc(joinList(grokAliases.slice(0, 3)))}${grokAliases.length > 3 ? "…" : ""}</span>` : ""}
+          <small>${d.grok.bots.length ? esc(grokAliases.length < d.grok.bots.length
+            ? UII18n.msg({ msg_key: "已勾选 {n} 个 Bot，有的还没配称呼，叫名字就能派活", msg_params: { n: d.grok.bots.length } })
+            : UII18n.msg({ msg_key: "已勾选 {n} 个 Bot，叫名字就能派活", msg_params: { n: d.grok.bots.length } })) : UII18n.t("xAI 的云端 AI 同事：登录、勾选 Bot，叫名字派活，回复念给你听")}</small></div>
       </div>
     </div>
     <div class="card panel" id="cli-form">
       ${c.exists ? `
-      ${usingCli ? "" : `<div class="banner info">${UII18n.t("本地 CLI 不是默认模型")}${active ? `（${UII18n.t("默认是")} ${esc(active.label)}）` : ""}${d.callable.ClaudeCLI ? UII18n.t("，但配了称呼，说“嗨 Claude”就能用它") : ""}。${UII18n.t("这里改的设置保存后，设备重新连接时生效；想让它当默认模型就点")}"${UII18n.t("保存并设为默认")}"。</div>`}
+      ${usingCli ? "" : `<div class="banner info">${UII18n.t("本地 CLI 不是默认模型")}${active ? esc(UII18n.msg({ msg_key: "（默认是 {name}）", msg_params: { name: { msg_key: active.label } } })) : ""}${d.callable.ClaudeCLI ? UII18n.t("，但配了称呼，说“嗨 Claude”就能用它") : ""}${UII18n.t("。这里改的设置保存后，设备重新连接时生效；想让它当默认模型就点“保存并设为默认”。")}</div>`}
       <div class="cli-row"><div class="cli-k">${UII18n.t("模型")}</div><div>
-        <div class="seg" data-k="model">${c.options.model.map((o) => `<button type="button" data-v="${o.value}" class="${o.value === v.model ? "on" : ""}">${o.label}<small>${esc(o.hint)}</small></button>`).join("")}
+        <div class="seg" data-k="model">${c.options.model.map((o) => `<button type="button" data-v="${o.value}" class="${o.value === v.model ? "on" : ""}">${esc(UII18n.text(o.label))}<small>${esc(UII18n.text(o.hint))}</small></button>`).join("")}
           <button type="button" data-v="__custom" class="${customModel ? "on" : ""}">${UII18n.t("自定义")}<small>${UII18n.t("填完整模型名")}</small></button></div>
         <input class="in mono hidden" id="model-custom" data-k="model_custom" value="${esc(customModel ? v.model : "")}" placeholder="${UII18n.t("例如 claude-sonnet-5-5")}" style="max-width:320px">
       </div></div>
       <div class="cli-row"><div class="cli-k">${UII18n.t("思考级别")}</div><div>
-        <div class="seg" data-k="effort">${c.options.effort.map((o) => `<button type="button" data-v="${o.value}" class="${o.value === (v.effort || "") ? "on" : ""}">${o.label}</button>`).join("")}</div>
+        <div class="seg" data-k="effort">${c.options.effort.map((o) => `<button type="button" data-v="${o.value}" class="${o.value === (v.effort || "") ? "on" : ""}">${esc(UII18n.text(o.label))}</button>`).join("")}</div>
         <div class="small muted" style="margin-top:6px">${UII18n.t("越高想得越久、回复越慢。")}<span id="effort-note" class="hidden" style="color:var(--warn)">${UII18n.t("超高和最高可能要等十几秒才开口，语音对话不推荐。")}</span></div>
       </div></div>
       <div class="cli-row"><div class="cli-k">${UII18n.t("权限级别")}</div><div>
         ${c.level === "custom" ? UII18n.t("<div class=\"banner warn\" style=\"margin:0 0 10px\">当前的工具和权限模式是手动配置的，和下面三档都对不上。选一档保存后会按这档重新设置。</div>") : ""}
         <div class="levels">${c.options.level.map((lv) => `<button type="button" class="level ${lv.value === c.level ? "on" : ""} ${lv.value}" data-level="${lv.value}">
-          <b>${esc(lv.label)}</b><small>${esc(lv.desc)}</small></button>`).join("")}</div>
+          <b>${esc(UII18n.text(lv.label))}</b><small>${esc(UII18n.text(lv.desc))}</small></button>`).join("")}</div>
         <label class="switch"><input type="checkbox" data-k="web" ${c.web ? "checked" : ""}><span>${UII18n.t("允许联网搜索")}</span>
           <small>${UII18n.t("可以搜索网页、打开网页，回答实时问题会多等几秒")}</small></label>
       </div></div>
@@ -739,11 +746,11 @@ async function renderLLM(root) {
           <label class="f">${UII18n.t("进度提示")}<span class="hint">${UII18n.t("第一次说这句，之后报已用时间；留空用默认的“还在处理，请稍等”")}</span>
             <input class="in" data-k="progress_reply" value="${esc(v.progress_reply || "")}" placeholder="${UII18n.t("还在处理，请稍等")}"></label>
           <label class="f full">${UII18n.t("接续关键字")}<span class="hint">${UII18n.t("超过自动接续时间后，说这些话会接着上次的对话，用逗号分隔")}</span>
-            <input class="in" data-k="resume_keywords" value="${esc((v.resume_keywords || []).join("，"))}"></label>
+            <input class="in" data-k="resume_keywords" value="${esc((v.resume_keywords || []).join(", "))}"></label>
           <label class="f full">CLI ${UII18n.t("路径")}<span class="hint">${UII18n.t("留空自动查找")}</span><input class="in mono" data-k="cli_path" value="${esc(v.cli_path || "")}"></label>
           <div class="full"><label class="f">${UII18n.t("当前开放的工具")}<span class="hint">${UII18n.t("由权限级别和联网开关决定，权限模式")} ${esc(v.permission_mode || "default")}</span></label>
             <div class="chips">${(v.allowed_tools || []).map((t) => { const info = c.options.tools.find((x) => x.name === t);
-              return `<span class="chip on ${info && info.risky ? "risky" : ""}">${esc(t)}${info ? " " + esc(info.label) : ""}</span>`; }).join("")}</div></div>
+              return `<span class="chip on ${info && info.risky ? "risky" : ""}">${esc(t)}${info ? " " + esc(UII18n.text(info.label)) : ""}</span>`; }).join("")}</div></div>
         </div>
       </details>
       <div class="actions"><span class="result" id="cli-result"></span>
@@ -755,7 +762,7 @@ async function renderLLM(root) {
 
     <div class="section-title">API Key · ${UII18n.t("云端模型，统一走 OpenAI 协议")}</div>
     <div class="vendors">${d.vendors.map((x) => `<button class="vendor ${x.id === llmVendor ? "on" : ""} ${d.vendor === x.id ? "using" : ""}" data-vendor="${x.id}">
-      <i class="${x.configured ? "set" : ""}"></i><b>${esc(x.label)}</b>
+      <i class="${x.configured ? "set" : ""}"></i><b>${esc(UII18n.text(x.label))}</b>
       <small>${d.vendor === x.id ? UII18n.t("✓ 默认") : x.configured ? (d.callable[x.entry] ? `${UII18n.t("称呼：")}${esc(d.callable[x.entry][0])}` : UII18n.t("已配置")) : UII18n.t("未配置")}</small></button>`).join("")}</div>
     <div class="card panel" id="api-form"></div>`;
 
@@ -796,14 +803,14 @@ async function renderLLM(root) {
     $("cli-save").onclick = (e) => busy(e.target, async () => {
       try {
         const r = await api("llm/claude", cliValues());
-        toast(r.changed.length ? r.note : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("llm", true);
+        toast(r.changed.length ? UII18n.text(r.note_msg || r.note) : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("llm", true);
       } catch (err) { result(`<span style="color:var(--err)">${esc(err.message)}</span>`); }
     });
     if ($("cli-use")) $("cli-use").onclick = (e) => busy(e.target, async () => {
       try {
         await api("llm/claude", cliValues());
         const r = await api("llm/use", { kind: "cli" });
-        toast(r.note, r.failed); page.dirty = null; await openPage("llm", true);
+        toast(UII18n.text(r.note_msg || r.note), r.failed); page.dirty = null; await openPage("llm", true);
       } catch (err) { result(`<span style="color:var(--err)">${esc(err.message)}</span>`); }
     });
   }
@@ -814,9 +821,9 @@ async function renderLLM(root) {
     const x = d.vendors.find((y) => y.id === llmVendor), using = d.vendor === x.id;
     const box = $("api-form");
     box.innerHTML = `
-      ${using ? "" : `<div class="banner info">${esc(x.label)} ${UII18n.t("不是默认模型")}${active ? `（${UII18n.t("默认是")} ${esc(active.label)}）` : ""}${d.callable[x.entry] ? `，${UII18n.t("但配了称呼“")}${esc(d.callable[x.entry][0])}”，${UII18n.t("叫名字就能用它")}` : UII18n.t("。填好保存后到呼名页配上称呼，就能叫名字用它")}；${UII18n.t("想让它当默认模型就点")}"${UII18n.t("保存并设为默认")}"。</div>`}
+      ${using ? "" : `<div class="banner info">${esc(UII18n.msg({ msg_key: "{name} 不是默认模型", msg_params: { name: { msg_key: x.label } } }))}${active ? esc(UII18n.msg({ msg_key: "（默认是 {name}）", msg_params: { name: { msg_key: active.label } } })) : ""}${d.callable[x.entry] ? esc(UII18n.msg({ msg_key: "，但配了称呼“{alias}”，叫名字就能用它", msg_params: { alias: d.callable[x.entry][0] } })) : UII18n.t("。填好保存后到呼名页配上称呼，就能叫名字用它")}${UII18n.t("；想让它当默认模型就点“保存并设为默认”。")}</div>`}
       ${x.conflict ? `<div class="banner err">${UII18n.t("配置里已有一个叫")} ${esc(x.entry)} ${UII18n.t("的条目，但不是 OpenAI 兼容类型，请在配置文件里改名或删掉它。")}</div>` : ""}
-      ${x.hint ? `<div class="banner info">${esc(x.hint)}</div>` : ""}
+      ${UII18n.text(x.hint) ? `<div class="banner info">${esc(UII18n.text(x.hint))}</div>` : ""}
       <div class="grid2">
         <label class="f">${UII18n.t("接口地址")}<input class="in mono" id="api-url" value="${esc(x.base_url)}" placeholder="https://…/v1"></label>
         <label class="f">${UII18n.t("模型")}${x.models.length ? UII18n.t("<span class=\"hint\">可从列表选，也可以手填</span>") : ""}
@@ -824,7 +831,7 @@ async function renderLLM(root) {
           <datalist id="api-models">${x.models.map((m) => `<option value="${esc(m)}">`).join("")}</datalist></label>
         <label class="f full">API Key${x.id === "custom" ? UII18n.t("<span class=\"hint\">本机服务不需要 Key 时可以留空</span>") : ""}
           <input class="in mono" id="api-key" type="password" autocomplete="off"
-            placeholder="${x.key_set ? `${UII18n.t("已设置")} ${esc(x.key_hint)}，${UII18n.t("输入新值可替换")}` : UII18n.t("未设置，粘贴后保存")}"></label>
+            placeholder="${x.key_set ? esc(UII18n.msg({ msg_key: "已设置 {hint}，输入新值可替换", msg_params: { hint: x.key_hint_msg || x.key_hint } })) : UII18n.t("未设置，粘贴后保存")}"></label>
       </div>
       <p class="muted small" style="margin:8px 0 0">Key ${UII18n.t("只保存在这台电脑的配置文件里，页面上只显示首尾 4 位。")}</p>
       <div class="actions"><span class="result" id="api-result"></span>
@@ -844,14 +851,14 @@ async function renderLLM(root) {
       catch (err) { bad(err.message); }
     });
     $("api-save").onclick = (e) => busy(e.target, async () => {
-      try { const r = await api(`llm/vendors/${x.id}`, values()); toast(r.changed.length ? r.note : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("llm", true); }
+      try { const r = await api(`llm/vendors/${x.id}`, values()); toast(r.changed.length ? UII18n.text(r.note_msg || r.note) : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("llm", true); }
       catch (err) { bad(err.message); }
     });
     if ($("api-use")) $("api-use").onclick = (e) => busy(e.target, async () => {
       try {
         await api(`llm/vendors/${x.id}`, values());
         const r = await api("llm/use", { kind: "api", vendor: x.id });
-        toast(r.note, r.failed); page.dirty = null; await openPage("llm", true);
+        toast(UII18n.text(r.note_msg || r.note), r.failed); page.dirty = null; await openPage("llm", true);
       } catch (err) { bad(err.message); }
     });
   };
@@ -877,7 +884,7 @@ async function renderASR(root) {
     <div class="page-head"><div><h1>${UII18n.t("语音识别")}</h1><p class="sub">${UII18n.t("把设备说的话转成文字。一次只能用一种：本地识别，或者豆包云端识别。")}</p></div>
       <span class="pill ok">${UII18n.t("当前：")}${esc(d.selected)}</span></div>
     ${d.choice === "other" ? `<div class="banner warn">${UII18n.t("当前使用的")} ${esc(d.selected)} ${UII18n.t("不在后台管理范围内（可能是手动改了配置文件）。在下面选择一种并使用即可切换。")}</div>` : ""}
-    ${d.running && d.running !== d.selected ? `<div class="banner warn">${UII18n.t("配置里选的是")} ${esc(d.selected)}，${UII18n.t("但服务仍在使用")} ${esc(d.running)}，${UII18n.t("重启服务后生效。")}</div>` : ""}
+    ${d.running && d.running !== d.selected ? `<div class="banner warn">${esc(UII18n.msg({ msg_key: "配置里选的是 {selected}，但服务仍在使用 {running}，重启服务后生效。", msg_params: { selected: d.selected, running: d.running } }))}</div>` : ""}
     <div class="choices">
       <button class="choice ${asrView === "local" ? "on" : ""}" data-asr="local">
         <div class="mark" style="background:var(--accent-soft);color:var(--accent)">${UII18n.t("本")}</div>
@@ -902,7 +909,7 @@ async function renderASR(root) {
     try {
       if (before) await before();
       const r = await api("asr/use", { choice });
-      toast(r.note, r.failed); page.dirty = null; await openPage("asr", true);
+      toast(UII18n.text(r.note_msg || r.note), r.failed); page.dirty = null; await openPage("asr", true);
     } catch (err) { toast(err.message, true); }
   });
   const renderForm = () => {
@@ -914,10 +921,10 @@ async function renderASR(root) {
     if (asrView === "local") {
       const using = d.choice === "local";
       box.innerHTML = !d.local.exists ? UII18n.t("<div class=\"muted\">配置文件里没有 SherpaXASR 条目，请重新运行安装脚本生成配置。</div>") : `
-        <p style="margin:0 0 14px">${esc(d.local.label)}</p>
+        <p style="margin:0 0 14px">${esc(UII18n.text(d.local.label_msg || d.local.label))}</p>
         <div class="kv" style="grid-template-columns:max-content minmax(0,1fr)">
-          ${using ? d.info.map((i) => `<div class="k">${esc(i.label)}</div><code>${esc(i.value)}</code>`).join("") : ""}
-          ${lm ? `<div class="k">${UII18n.t("模型文件")}</div><div style="color:${lm.ok ? "var(--ok)" : "var(--err)"}">${esc(lm.detail)}</div>` : ""}
+          ${using ? d.info.map((i) => `<div class="k">${esc(UII18n.text(i.label))}</div><code>${esc(i.value)}</code>`).join("") : ""}
+          ${lm ? `<div class="k">${UII18n.t("模型文件")}</div><div style="color:${lm.ok ? "var(--ok)" : "var(--err)"}">${esc(UII18n.text(lm.detail_msg || lm.detail))}</div>` : ""}
         </div>
         ${using ? "" : `<div class="actions"><span class="result muted">${UII18n.t("切换后新连接马上生效，在线设备重新连接后生效。")}</span>
           <button class="btn primary" id="local-use" ${lm && lm.ok ? "" : "disabled"}>${UII18n.t("使用本地 X-ASR")}</button></div>`}`;
@@ -936,14 +943,14 @@ async function renderASR(root) {
       <div class="grid2" style="margin-top:6px">
         <label class="f full" data-auth="key">API Key
           <input class="in mono" id="db-key" type="password" autocomplete="off"
-            placeholder="${b.key_set ? `${UII18n.t("已设置")} ${esc(b.key_hint)}，${UII18n.t("输入新值可替换")}` : UII18n.t("未设置，粘贴后保存")}"></label>
+            placeholder="${b.key_set ? esc(UII18n.msg({ msg_key: "已设置 {hint}，输入新值可替换", msg_params: { hint: b.key_hint_msg || b.key_hint } })) : UII18n.t("未设置，粘贴后保存")}"></label>
         <label class="f" data-auth="app">APP ID<input class="in mono" id="db-appid" value="${esc(b.appid)}" placeholder="${UII18n.t("一串数字")}"></label>
         <label class="f" data-auth="app">Access Token
           <input class="in mono" id="db-token" type="password" autocomplete="off"
-            placeholder="${b.token_set ? `${UII18n.t("已设置")} ${esc(b.token_hint)}，${UII18n.t("输入新值可替换")}` : UII18n.t("未设置，粘贴后保存")}"></label>
+            placeholder="${b.token_set ? esc(UII18n.msg({ msg_key: "已设置 {hint}，输入新值可替换", msg_params: { hint: b.token_hint_msg || b.token_hint } })) : UII18n.t("未设置，粘贴后保存")}"></label>
       </div>
       <div class="cli-row" style="margin-top:6px"><div class="cli-k">${UII18n.t("计费方式")}</div><div>
-        <div class="seg" id="db-res">${b.resources.map((r) => `<button type="button" data-v="${esc(r.value)}" class="${r.value === b.resource_id ? "on" : ""}">${esc(r.label)}<small>${esc(r.hint)}</small></button>`).join("")}</div>
+        <div class="seg" id="db-res">${b.resources.map((r) => `<button type="button" data-v="${esc(r.value)}" class="${r.value === b.resource_id ? "on" : ""}">${esc(UII18n.text(r.label))}<small>${esc(UII18n.text(r.hint))}</small></button>`).join("")}</div>
         <div class="small muted" style="margin-top:6px">${UII18n.t("要和控制台里开通的一致，不一致会提示鉴权失败。")}</div></div></div>
       <p class="muted small" style="margin:8px 0 0">${UII18n.t("密钥只保存在这台电脑的配置文件里，页面上只显示首尾 4 位。下面的热词会直接带给豆包；识别后纠错照常生效。")}</p>
       <div class="actions"><span class="result" id="db-result"></span>
@@ -970,7 +977,7 @@ async function renderASR(root) {
       } catch (err) { bad(err.message); }
     });
     $("db-save").onclick = (e) => busy(e.target, async () => {
-      try { const r = await api("asr/doubao", values()); toast(r.changed.length ? r.note : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("asr", true); }
+      try { const r = await api("asr/doubao", values()); toast(r.changed.length ? UII18n.text(r.note_msg || r.note) : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("asr", true); }
       catch (err) { bad(err.message); }
     });
     if ($("db-use")) $("db-use").onclick = (e) => use(e.target, "doubao", () => api("asr/doubao", values()));
@@ -994,7 +1001,7 @@ const saveAndReload = (target, path, body, own) => {
   if (asrChecks.some((f) => f && f !== own && f())
       && !confirm(UII18n.t("其他卡片还有没保存的修改，保存这里后页面会刷新，那些修改会丢掉。继续吗？"))) return;
   return busy(target, async () => {
-    try { const r = await api(path, body); toast(r.note, r.failed); page.dirty = null; await openPage("asr", true); }
+    try { const r = await api(path, body); toast(UII18n.text(r.note_msg || r.note), r.failed); page.dirty = null; await openPage("asr", true); }
     catch (err) { toast(err.message, true); }
   });
 };
@@ -1018,7 +1025,7 @@ function hotwordsCard(h) {
           ${UII18n.t("写原本的大小写，一个词一项，不要太多（几十个以内），太多反而容易误认。")}</p>
         <div class="chips" id="hw-chips"></div>
         ${h.auto.length ? `<p class="muted small" style="margin:10px 0 0">${UII18n.t("虚线的来自")}<a href="#calls">${UII18n.t("呼名")}</a>${UII18n.t("里的模型名字，自动带上，在呼名页修改。")}</p>` : ""}
-        ${h.dropped.length ? `<div class="banner warn" style="margin:10px 0 0">${UII18n.t("豆包一次最多带约 100 个 token 的热词，超出了，这")} ${h.dropped.length} ${UII18n.t("个不会带上：")}${esc(h.dropped.join("、"))}。${UII18n.t("呼名里的模型名字会优先带上。")}</div>` : ""}
+        ${h.dropped.length ? `<div class="banner warn" style="margin:10px 0 0">${esc(UII18n.msg({ msg_key: "豆包一次最多带约 100 个 token 的热词，超出了，这 {n} 个不会带上：{words}。", msg_params: { n: h.dropped.length, words: joinList(h.dropped) } }))}${UII18n.t("呼名里的模型名字会优先带上。")}</div>` : ""}
         <div style="display:flex;gap:8px;margin-top:12px;max-width:440px">
           <input class="in" id="hw-new" placeholder="${UII18n.t("添加热词，回车确认")}" ${h.supported ? "" : "disabled"}><button class="btn sm" id="hw-add" ${h.supported ? "" : "disabled"}>${UII18n.t("添加")}</button></div>
         <div class="actions"><span class="result muted">${h.supported ? UII18n.t("保存后重新加载语音识别：新连接马上生效，在线设备重新连接后生效。") : UII18n.t("当前语音识别不支持热词，支持的有本地 X-ASR、豆包。")}</span>
@@ -1163,7 +1170,7 @@ function vadCard(v) {
       ${v.asr_doubao ? `<div class="banner info">${UII18n.t("豆包由识别服务断句，也按这个时长判断一句话说完。")}</div>` : ""}
       <div class="panel ${v.supported ? "" : "disabled-area"}">
         <p style="margin:0 0 14px">${UII18n.t("说话中间停顿超过这个时长，就当这句话说完了，发给大模型。经常话没说完就被打断，就调大一些；调大后每句话说完要多等这么久才回复。")}</p>
-        <label class="f">${UII18n.t("停顿时长（毫秒）")}<span class="hint">${low}～${high}，${UII18n.t("一般 800～1200 比较合适")}</span>
+        <label class="f">${UII18n.t("停顿时长（毫秒）")}<span class="hint">${esc(UII18n.msg({ msg_key: "{low}～{high}，一般 800～1200 比较合适", msg_params: { low, high } }))}</span>
           <input class="in" id="vad-silence" value="${esc(v.silence_ms)}" inputmode="numeric" ${v.supported ? "" : "disabled"}></label>
         <div class="actions"><span class="result muted">${v.supported ? UII18n.t("保存后马上生效，在线设备不用重新连接。本地识别和豆包都按这个时长判断。") : UII18n.t("后台只支持设置 SileroVAD 的停顿时长。")}</span>
           <button class="btn primary" id="vad-save" ${v.supported ? "" : "disabled"}>${UII18n.t("保存")}</button></div>
@@ -1187,7 +1194,7 @@ async function renderTTS(root) {
   const cur = d.voices.find((v) => v.value === d.voice);
   root.innerHTML = `
     <div class="page-head"><div><h1>${UII18n.t("语音合成")}</h1><p class="sub">${UII18n.t("把回复转成语音。EdgeTTS 免费、不需要 Key，换音色不用下载任何文件。")}</p></div>
-      <span class="pill ok">${UII18n.t("当前：")}${esc(d.selected)}${cur ? ` · ${esc(cur.name)}` : ""}</span></div>
+      <span class="pill ok">${UII18n.t("当前：")}${esc(d.selected)}${cur ? ` · ${esc(UII18n.text(cur.name))}` : ""}</span></div>
     <div class="card panel"><h3>${UII18n.t("說話語言")}</h3>
       <p class="muted small">${UII18n.t("選擇模型回覆、喚醒提示與語音測試使用的語言。儲存後會結束目前對話。朗讀發音取決於所選 TTS 模型與音色支援。")}</p>
       <div class="actions"><select class="in" id="tts-language" aria-label="${UII18n.t("說話語言")}">${languageChoices(d.language_options)}</select>
@@ -1196,9 +1203,9 @@ async function renderTTS(root) {
     <div class="card panel" id="speech-api-form"></div>
     ${isEdge ? '' : UII18n.t("<button class=\"btn\" id=\"tts-edge\">切回免費 EdgeTTS</button>")}
     <div class="card panel ${isEdge ? "" : "disabled-area"}">
-      ${groups.map((g) => `<div class="voice-group"><h3>${esc(g.name)}</h3><div class="voices">${g.items.map((v) => `
+      ${groups.map((g) => `<div class="voice-group"><h3>${esc(UII18n.text(g.name))}</h3><div class="voices">${g.items.map((v) => `
         <div class="voice ${v.value === chosen ? "on" : ""}" data-voice="${esc(v.value)}" role="button" tabindex="0">
-          <div class="meta"><b>${esc(v.name)}</b> <span class="muted small">${esc(v.gender)}</span><small>${esc(v.style)}</small></div>
+          <div class="meta"><b>${esc(UII18n.text(v.name))}</b> <span class="muted small">${esc(UII18n.text(v.gender))}</span><small>${esc(UII18n.text(v.style))}</small></div>
           <button class="play" data-play="${esc(v.value)}" title="${UII18n.t("试听")}">▶</button></div>`).join("")}</div></div>`).join("")}
       <div class="actions"><span class="result muted">${UII18n.t("保存后，设备重新连接时生效。")}</span>
         <button class="btn primary" id="tts-save">${UII18n.t("保存音色")}</button></div>
@@ -1223,7 +1230,7 @@ async function renderTTS(root) {
   }));
   page.dirty = () => chosen !== d.voice;
   $("tts-save").onclick = (e) => busy(e.target, async () => {
-    try { const r = await api("tts", { voice: chosen }); toast(r.changed.length ? r.note : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("tts", true); }
+    try { const r = await api("tts", { voice: chosen }); toast(r.changed.length ? UII18n.text(r.note_msg || r.note) : UII18n.t("没有修改"), r.failed); page.dirty = null; await openPage("tts", true); }
     catch (err) { toast(err.message, true); }
   });
   const edgeDirty = page.dirty;
@@ -1234,11 +1241,11 @@ async function renderTTS(root) {
   $('tts-language-save').onclick = e => busy(e.target, async () => {
     try {
       const language = $('tts-language').value;
-      const r = await api('language', {language}); savedLanguage = language; toast(r.note);
+      const r = await api('language', {language}); savedLanguage = language; toast(UII18n.text(r.note_msg || r.note));
     } catch (err) { toast(err.message, true); }
   });
   if ($('tts-edge')) $('tts-edge').onclick = (e) => busy(e.target, async () => {
-    try { const r = await api('tts/use', {choice: 'edge'}); toast(r.note); page.dirty = null; await openPage('tts', true); }
+    try { const r = await api('tts/use', {choice: 'edge'}); toast(UII18n.text(r.note_msg || r.note)); page.dirty = null; await openPage('tts', true); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -1253,7 +1260,7 @@ function renderSpeechForm(box, section, d, reload) {
       <label class="f">${UII18n.t("模型")}<input class="in" id="sp-model" value="${esc(d.model)}"></label>
       <label class="f">API Key<input class="in" id="sp-key" type="password" autocomplete="off" placeholder="${d.key_set ? UII18n.t("已設定，留空保留") : UII18n.t("尚未設定")}"></label>
       ${section === 'asr' ? `
-        <label class="f">${UII18n.t("語言")}<input class="in" id="sp-language" value="${esc(d.language)}" placeholder="zh；${UII18n.t("留空自動偵測")}"></label>
+        <label class="f">${UII18n.t("語言")}<input class="in" id="sp-language" value="${esc(d.language)}" placeholder="${UII18n.t("zh；留空自動偵測")}"></label>
         <label class="f full">${UII18n.t("轉寫提示")}<textarea class="in" id="sp-prompt" placeholder="${UII18n.t("請以繁體中文轉寫，保留英文原文。")}">${esc(d.prompt)}</textarea></label>` : `
         <label class="f">${UII18n.t("音色")}<input class="in" id="sp-voice" value="${esc(d.voice)}"></label>
         <label class="f">${UII18n.t("語速")}<input class="in" id="sp-speed" type="number" min="0.25" max="4" step="0.05" value="${esc(d.speed)}"></label>
@@ -1265,7 +1272,7 @@ function renderSpeechForm(box, section, d, reload) {
       <button class="btn" id="sp-save" ${d.conflict ? 'disabled' : ''}>${UII18n.t("儲存")}</button>
       <button class="btn primary" id="sp-use" ${d.conflict ? 'disabled' : ''}>${UII18n.t("儲存並使用")}</button></div>
     <div class="actions">${section === 'asr' ? `<input type="file" id="sp-audio" accept=".wav,audio/wav" aria-label="${UII18n.t("測試 WAV 音檔")}">` : ''}
-      <button class="btn" id="sp-test">${UII18n.t(section === 'asr' ? '測試轉寫' : '測試語音')}</button><span class="result" id="sp-result"></span></div>
+      <button class="btn" id="sp-test">${section === 'asr' ? UII18n.t('測試轉寫') : UII18n.t('測試語音')}</button><span class="result" id="sp-result"></span></div>
     <p class="muted small">${UII18n.t("測試使用已儲存的設定，會呼叫服務商 API 並可能產生費用。WAV 音檔限 700 KB、30 秒。")}</p>`;
   $('sp-protocol').value = d.api_protocol || 'openai';
   if (section === 'tts') { $('sp-format').value = d.format || 'wav'; $('sp-rate').value = d.pcm_sample_rate || 24000; }
@@ -1276,9 +1283,13 @@ function renderSpeechForm(box, section, d, reload) {
   const save = (use) => async (e) => busy(e.target, async () => {
     try {
       const r = await api('speech/' + section, values());
-      if (r.failed) { toast(r.note, true); return; }
-      let note = r.note;
-      if (use) { const switched = await api(section + '/use', {choice: 'openai'}); if (switched.failed) throw Error(switched.note); note = switched.note; }
+      if (r.failed) { toast(UII18n.text(r.note_msg || r.note), true); return; }
+      let note = UII18n.text(r.note_msg || r.note);
+      if (use) {
+        const switched = await api(section + '/use', {choice: 'openai'});
+        if (switched.failed) throw Error(UII18n.text(switched.note_msg || switched.note));
+        note = UII18n.text(switched.note_msg || switched.note);
+      }
       page.dirty = null; toast(note || UII18n.t("已儲存")); await reload();
     } catch (err) { toast(err.message, true); }
   });
@@ -1292,7 +1303,7 @@ function renderSpeechForm(box, section, d, reload) {
         body.audio = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); });
       }
       const r = await api('speech/' + section + '/test', body);
-      $('sp-result').textContent = r.text || UII18n.t(section === 'asr' ? '沒有辨識到語音' : '語音測試成功');
+      $('sp-result').textContent = r.text || (section === 'asr' ? UII18n.t('沒有辨識到語音') : UII18n.t('語音測試成功'));
       if (section === 'tts') { if (audio) audio.pause(); audio = new Audio(`data:${r.mime_type};base64,${r.audio}`); await audio.play(); }
     } catch (err) { $('sp-result').textContent = err.message; toast(err.message, true); }
   });
@@ -1303,7 +1314,7 @@ let mcpSelection = '';
 async function renderMCP(root) {
   const d = await api('mcp');
   root.innerHTML = `<div class="page-head"><div><h1>MCP ${UII18n.t("工具")}</h1><p class="sub">${UII18n.t("連接外部 MCP 伺服器，讓支援工具呼叫的 API 模型使用其工具。")}</p></div></div>
-    <div class="banner info">${esc(d.note)}</div>
+    <div class="banner info">${esc(UII18n.text(d.note_msg || d.note))}</div>
     <div class="card panel">
       <label class="f">${UII18n.t("伺服器")}<select class="in" id="mcp-select"><option value="">${UII18n.t("新增伺服器")}</option>
         ${Object.keys(d.servers).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>
@@ -1334,13 +1345,13 @@ async function renderMCP(root) {
     try {
       const name = $('mcp-name').value;
       const r = await api('mcp', {name, config: JSON.parse($('mcp-config').value)});
-      mcpSelection = name; page.dirty = null; toast(r.note); await openPage('mcp', true);
+      mcpSelection = name; page.dirty = null; toast(UII18n.text(r.note_msg || r.note)); await openPage('mcp', true);
     }
     catch (err) { toast(err.message, true); }
   });
   $('mcp-remove').onclick = e => busy(e.target, async () => {
     if (!confirm(UII18n.t("刪除此 MCP 伺服器？"))) return;
-    try { const r = await api('mcp/delete', {name: $('mcp-select').value}); mcpSelection = ''; page.dirty = null; toast(r.note); await openPage('mcp', true); }
+    try { const r = await api('mcp/delete', {name: $('mcp-select').value}); mcpSelection = ''; page.dirty = null; toast(UII18n.text(r.note_msg || r.note)); await openPage('mcp', true); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -1365,12 +1376,12 @@ async function renderIntent(root) {
     <div class="card panel" id="plugins-box">
       <div class="plugins">
         ${d.plugins.map((p) => `<label class="plugin ${p.enabled ? "on" : ""}"><input type="checkbox" data-fn="${esc(p.name)}" ${p.enabled ? "checked" : ""}>
-          <div style="flex:1"><b>${esc(p.label)}</b>${p.needs_config ? UII18n.t(" <span class=\"pill warn\">还没配置</span>") : ""}<small>${esc(p.desc)}</small></div>
-          ${p.settings ? `<button type="button" class="btn sm" data-settings="${esc(p.settings)}" data-label="${esc(p.label)}">${UII18n.t("设置")}</button>` : ""}</label>`).join("")}
+          <div style="flex:1"><b>${esc(UII18n.text(p.label))}</b>${p.needs_config ? UII18n.t(" <span class=\"pill warn\">还没配置</span>") : ""}<small>${esc(UII18n.text(p.desc))}</small></div>
+          ${p.settings ? `<button type="button" class="btn sm" data-settings="${esc(p.settings)}" data-label="${esc(UII18n.text(p.label))}">${UII18n.t("设置")}</button>` : ""}</label>`).join("")}
         ${d.always_on.map((p) => `<div class="plugin fixed"><input type="checkbox" checked disabled>
-          <div><b>${esc(p.label)}</b> <span class="pill">${UII18n.t("始终开启")}</span><small>${esc(p.desc)}</small></div></div>`).join("")}
+          <div><b>${esc(UII18n.text(p.label))}</b> <span class="pill">${UII18n.t("始终开启")}</span><small>${esc(UII18n.text(p.desc))}</small></div></div>`).join("")}
       </div>
-      ${d.extra.length ? `<p class="muted small" style="margin:12px 0 0">${UII18n.t("另外保留了配置文件里手动添加的：")}${esc(d.extra.join("、"))}</p>` : ""}
+      ${d.extra.length ? `<p class="muted small" style="margin:12px 0 0">${esc(UII18n.msg({ msg_key: "另外保留了配置文件里手动添加的：{names}", msg_params: { names: joinList(d.extra) } }))}</p>` : ""}
     </div>
     <div class="card panel hidden" id="plugin-settings" style="margin-top:12px"></div>
     <div class="actions"><button class="btn primary" id="intent-save">${UII18n.t("保存")}</button></div>`;
@@ -1395,7 +1406,9 @@ async function renderIntent(root) {
   }));
   root.querySelectorAll("[data-fn]").forEach((i) => (i.onchange = () => {
     const p = d.plugins.find((x) => x.name === i.dataset.fn);
-    if (i.checked && p && p.needs_config) toast(`${p.label}${UII18n.t("还没配置，")}${p.settings ? UII18n.t("点旁边的「设置」填写") : UII18n.t("需要在配置文件里填写")}，${UII18n.t("否则用不了")}`, true);
+    if (i.checked && p && p.needs_config) toast(p.settings
+      ? UII18n.msg({ msg_key: "{plugin}还没配置，点旁边的「设置」填写，否则用不了", msg_params: { plugin: { msg_key: p.label } } })
+      : UII18n.msg({ msg_key: "{plugin}还没配置，需要在配置文件里填写，否则用不了", msg_params: { plugin: { msg_key: p.label } } }), true);
     sync();
   }));
   sync();
@@ -1403,7 +1416,7 @@ async function renderIntent(root) {
   pluginSettingsDirty = () => false;
   page.dirty = () => intentDirty() || pluginSettingsDirty();
   $("intent-save").onclick = (e) => busy(e.target, async () => {
-    try { const r = await api("intent", values()); toast(r.note, r.failed); page.dirty = null; await openPage("intent", true); }
+    try { const r = await api("intent", values()); toast(UII18n.text(r.note_msg || r.note), r.failed); page.dirty = null; await openPage("intent", true); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -1415,15 +1428,15 @@ async function openPluginSettings(id, label, onSaved) {
   const box = $("plugin-settings");
   box.classList.remove("hidden");
   const input = (f) => f.type === "secret"
-    ? `<input class="in mono" data-k="${esc(f.key)}" type="password" autocomplete="off" placeholder="${f.set ? `${UII18n.t("已配置")} ${esc(f.hint_set)}，${UII18n.t("留空表示不改")}` : UII18n.t("未配置，粘贴后保存")}">`
+    ? `<input class="in mono" data-k="${esc(f.key)}" type="password" autocomplete="off" placeholder="${f.set ? esc(UII18n.msg({ msg_key: "已配置 {hint}，留空表示不改", msg_params: { hint: f.hint_set_msg || f.hint_set } })) : UII18n.t("未配置，粘贴后保存")}">`
     : `<input class="in ${f.type === "number" ? "" : "mono"}" data-k="${esc(f.key)}" ${f.type === "number" ? `type="number" min="${f.min ?? ""}" max="${f.max ?? ""}"` : ""}
         value="${esc(f.value ?? "")}" placeholder="${f.default !== undefined ? UII18n.t("留空用默认：") + esc(f.default) : ""}">`;
   box.innerHTML = `
     <div class="section-title" style="margin-top:0">${esc(label)} · ${UII18n.t("设置")} ${d.configured ? UII18n.t("<span class=\"pill ok\">已配置</span>") : UII18n.t("<span class=\"pill warn\">还没配置</span>")}</div>
-    ${d.note ? `<div class="banner info">${esc(d.note)}</div>` : ""}
-    ${d.legacy_note ? `<div class="banner warn">${esc(d.legacy_note)}</div>` : ""}
+    ${UII18n.text(d.note) ? `<div class="banner info">${esc(UII18n.text(d.note))}</div>` : ""}
+    ${UII18n.text(d.legacy_note) ? `<div class="banner warn">${esc(UII18n.text(d.legacy_note))}</div>` : ""}
     <div class="grid2">
-      ${d.fields.map((f) => `<label class="f ${f.type === "text" ? "full" : ""}">${esc(f.label)}${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ""}${input(f)}</label>`).join("")}
+      ${d.fields.map((f) => `<label class="f ${f.type === "text" ? "full" : ""}">${esc(UII18n.text(f.label))}${UII18n.text(f.hint) ? `<span class="hint">${esc(UII18n.text(f.hint))}</span>` : ""}${input(f)}</label>`).join("")}
     </div>
     <p class="muted small" style="margin:8px 0 0">${d.fields.some((f) => f.type === "secret") ? UII18n.t("密钥只保存在网关的配置文件里，页面上只显示首尾 4 位。") : ""}${UII18n.t("保存后马上生效，不用重启。")}</p>
     <div class="actions"><span class="result" id="ps-result"></span>
@@ -1441,13 +1454,13 @@ async function openPluginSettings(id, label, onSaved) {
     result(UII18n.t("<span class=\"muted\">正在真搜一次，最多等 30 秒…</span>"));
     try {
       const r = await api(`plugin-settings/${encodeURIComponent(id)}/test`, values());
-      result(`<span style="color:var(--ok)">✓ ${r.message ? esc(r.message) : `${UII18n.t("搜到")} ${r.count} ${UII18n.t("条，用时")} ${r.seconds} ${UII18n.t("秒。第一条：")}${esc(r.first)}`}</span>`);
+      result(`<span style="color:var(--ok)">✓ ${UII18n.text(r.message_msg || r.message) ? esc(UII18n.text(r.message_msg || r.message)) : `${UII18n.t("搜到")} ${r.count} ${UII18n.t("条，用时")} ${r.seconds} ${UII18n.t("秒。第一条：")}${esc(r.first)}`}</span>`);
     } catch (err) { bad(err.message); }
   });
   $("ps-save").onclick = (e) => busy(e.target, async () => {
     try {
       const r = await api("plugin-settings/" + encodeURIComponent(id), values());
-      toast(r.note);
+      toast(UII18n.text(r.note_msg || r.note));
       // 不整页刷新，免得丢掉还没保存的插件勾选；只更新这个插件的"还没配置"标记
       document.querySelectorAll(`[data-settings="${CSS.escape(id)}"]`).forEach((b) => {
         const pill = b.closest(".plugin").querySelector(".pill.warn");
@@ -1470,6 +1483,7 @@ async function renderGrokBot(root) {
   const checked = new Set(entries.map((e) => e.bot_id));
   const aliasesOf = (id) => ((entries.find((e) => e.bot_id === id) || {}).aliases || []);
   // 还没从云端读过列表时，先列出已勾选的
+  const lr = login.result || {};   // 上一次登录的结果
   const list = bots || entries.map((e) => ({ id: e.bot_id, name: e.bot_name, preview: "", busy: false }));
   root.innerHTML = `
     <div class="page-head"><div><h1>Grok Bot</h1><p class="sub">xAI ${UII18n.t("的云端 AI 同事。用 Cursor 账号登录后勾选 Bot，它的名字会自动成为称呼，对设备说“嗨 孙悟空，帮我……”就能派活，它的回复会念出来；长任务做完后在 Grok Bot App 里也能看到。")}</p></div>
@@ -1480,8 +1494,10 @@ async function renderGrokBot(root) {
       ${login.pending ? `<div class="banner info">${UII18n.t("正在等待你在浏览器里批准登录。页面没有自动打开的话，复制下面的地址在浏览器里打开，登录 Cursor 账号后点“批准”（不是“打开 Grok Bot”）。")}</div>
         <div class="kv"><div class="k">${UII18n.t("登录地址")}</div><code style="word-break:break-all">${esc(login.url)}</code><button class="btn sm copy" data-copy="${esc(login.url)}">${UII18n.t("复制")}</button></div>
         <div class="actions"><a class="btn" href="${esc(login.url)}" target="_blank" rel="noopener">${UII18n.t("打开登录页")}</a><button class="btn" id="gb-cancel">${UII18n.t("取消")}</button></div>`
-      : `${login.result && !login.result.ok ? `<div class="banner err">${esc(login.result.note)}</div>` : ""}
-        ${acc.logged_in ? `<p style="margin:0 0 12px">${days >= 0 ? `${UII18n.t("已登录，登录有效期还有")} ${days} ${UII18n.t("天（到")} ${esc(fmt(acc.expires_at))}）。${UII18n.t("快到期时会自动续期")}` : UII18n.t("已登录，下次使用时会自动续期")}；${UII18n.t("续期失败这里会提示重新登录。")}</p>`
+      : `${lr.ok === false ? `<div class="banner err">${esc(UII18n.text(lr.note_msg || lr.note))}</div>` : ""}
+        ${acc.logged_in ? `<p style="margin:0 0 12px">${esc(days >= 0
+          ? UII18n.msg({ msg_key: "已登录，登录有效期还有 {days} 天（到 {date}）。快到期时会自动续期；续期失败这里会提示重新登录。", msg_params: { days, date: fmt(acc.expires_at) } })
+          : UII18n.t("已登录，下次使用时会自动续期；续期失败这里会提示重新登录。"))}</p>`
           : acc.needs_login ? UII18n.t("<p style=\"margin:0 0 12px\">登录已失效（服务端要求重新登录），请重新登录。</p>")
           : UII18n.t("<p style=\"margin:0 0 12px\">还没登录。点“登录”会给出一个 Cursor 的登录地址，在浏览器里批准即可，不需要在这里输入密码。</p>")}
         <div class="actions" style="justify-content:flex-start"><button class="btn primary" id="gb-login">${acc.logged_in ? UII18n.t("重新登录") : UII18n.t("登录")}</button>
@@ -1490,10 +1506,10 @@ async function renderGrokBot(root) {
     <div class="section-title">Bot</div>
     <div class="card panel">
       ${!acc.logged_in ? UII18n.t("<p class=\"muted\" style=\"margin:0\">登录后再读取 Bot 列表。</p>") : `
-      ${d.bots_error ? `<div class="banner err">${UII18n.t("读取 Bot 列表失败：")}${esc(d.bots_error)}</div>` : ""}
-      <p class="muted small" style="margin:0 0 4px">${bots ? `${UII18n.t("列表读取于")} ${esc(fmt(d.bots_at))}。` : UII18n.t("还没从云端读取 Bot 列表（会唤醒休眠的云端电脑，要几秒）。")}${UII18n.t("勾选保存后自动用 Bot 的名字做称呼；想改写法、或按你的发音录入，到")}<a href="#calls">${UII18n.t("呼名")}</a>${UII18n.t("页。名字含空格标点、或已被别的模型占用时不会自动配，要到呼名页手动加。")}</p>
+      ${UII18n.text(d.bots_error) ? `<div class="banner err">${UII18n.t("读取 Bot 列表失败：")}${esc(UII18n.text(d.bots_error))}</div>` : ""}
+      <p class="muted small" style="margin:0 0 4px">${bots ? esc(UII18n.msg({ msg_key: "列表读取于 {time}。", msg_params: { time: fmt(d.bots_at) } })) : UII18n.t("还没从云端读取 Bot 列表（会唤醒休眠的云端电脑，要几秒）。")}${UII18n.t("勾选保存后自动用 Bot 的名字做称呼；想改写法、或按你的发音录入，到")}<a href="#calls">${UII18n.t("呼名")}</a>${UII18n.t("页。名字含空格标点、或已被别的模型占用时不会自动配，要到呼名页手动加。")}</p>
       ${list.length ? list.map((b) => `<label class="switch" style="margin-top:8px"><input type="checkbox" data-bot="${esc(b.id)}" data-name="${esc(b.name)}" ${checked.has(b.id) ? "checked" : ""}>
-          <span>${esc(b.name)}${b.busy ? UII18n.t(" <span class=\"pill\">忙</span>") : ""}${checked.has(b.id) ? (aliasesOf(b.id).length ? ` <span class="pill ok">${UII18n.t("称呼：")}${esc(aliasesOf(b.id).join("、"))}</span>` : UII18n.t(" <span class=\"pill warn\">还没配称呼</span>")) : ""}</span>
+          <span>${esc(b.name)}${b.busy ? UII18n.t(" <span class=\"pill\">忙</span>") : ""}${checked.has(b.id) ? (aliasesOf(b.id).length ? ` <span class="pill ok">${UII18n.t("称呼：")}${esc(joinList(aliasesOf(b.id)))}</span>` : UII18n.t(" <span class=\"pill warn\">还没配称呼</span>")) : ""}</span>
           <small>${esc(b.preview || "")}</small></label>`).join("") : UII18n.t("<p class=\"muted\" style=\"margin:8px 0 0\">没有 Bot。先在 Grok Bot App 里创建，再点“重新读取”。</p>")}
       <div class="actions"><span class="result muted">${UII18n.t("保存后马上生效，不用重启服务。")}</span>
         <button class="btn" id="gb-refresh">${bots ? UII18n.t("重新读取") : UII18n.t("读取 Bot 列表")}</button><button class="btn primary" id="gb-save">${UII18n.t("保存")}</button></div>`}
@@ -1513,7 +1529,7 @@ async function renderGrokBot(root) {
   });
   if ($("gb-save")) $("gb-save").onclick = (e) => busy(e.target, async () => {
     const picked = [...root.querySelectorAll("[data-bot]:checked")].map((c) => ({ id: c.dataset.bot, name: c.dataset.name }));
-    try { const r = await api("grokbot/bots", { bots: picked }); toast(r.changed.length ? r.note : UII18n.t("没有修改")); await openPage("grokbot", true); }
+    try { const r = await api("grokbot/bots", { bots: picked }); toast(r.changed.length ? UII18n.text(r.note_msg || r.note) : UII18n.t("没有修改")); await openPage("grokbot", true); }
     catch (err) { toast(err.message, true); }
   });
   if (login.pending) {
@@ -1550,7 +1566,7 @@ async function renderMemory(root) {
     <div id="mem-list"></div>`;
   $('reply-language').value = d.reply_language || '';
   $('reply-language-save').onclick = e => busy(e.target, async () => {
-    try { const r = await api('language', {language: $('reply-language').value}); toast(r.note); }
+    try { const r = await api('language', {language: $('reply-language').value}); toast(UII18n.text(r.note_msg || r.note)); }
     catch (err) { toast(err.message, true); }
   });
   const list = $("mem-list");
@@ -1558,13 +1574,15 @@ async function renderMemory(root) {
     if (!d.devices.length) { list.innerHTML = UII18n.t("<div class=\"card panel muted\">还没有聊天记录。设备聊过几轮、旧对话被截掉后，这里会出现总结出来的记忆。</div>"); return; }
     list.innerHTML = d.devices.map((x) => {
       const m = x.memory, value = edits[x.device] ?? m.summary;
-      const models = x.models.map((o) => `${esc(o.label)} ${o.count} ${UII18n.t("条")}${o.agent ? UII18n.t("（不总结）") : ""}`).join("、") || UII18n.t("没有聊天记录");
+      const models = esc(joinList(x.models.map((o) => o.agent
+        ? UII18n.msg({ msg_key: "{model} {n} 条（不总结）", msg_params: { model: o.label_msg || o.label, n: o.count } })
+        : UII18n.msg({ msg_key: "{model} {n} 条", msg_params: { model: o.label_msg || o.label, n: o.count } })))) || UII18n.t("没有聊天记录");
       return `<div class="card panel" data-device="${esc(x.device)}">
         <div class="device-top"><span class="dot ${x.online ? "on" : ""}"></span><b class="mono">${esc(x.device)}</b>
           ${m.updated ? `<span class="pill">${esc(SOURCE[m.source] || "")} · ${esc(fmt(m.updated))}</span>` : UII18n.t("<span class=\"pill\">还没有记忆</span>")}</div>
         <p class="muted small" style="margin:8px 0 0">${UII18n.t("存着的记录：")}${models}</p>
         <label class="f" style="margin-top:14px">${UII18n.t("记忆全文")}<span class="hint">${UII18n.t("要点式，每条一行；自动总结时会在这份基础上合并新的内容（约")} ${st.summary_chars} ${UII18n.t("字以内）")}</span>
-          <textarea class="in" rows="8" data-edit maxlength="5000" placeholder="（${UII18n.t("空）")}">${esc(value)}</textarea></label>
+          <textarea class="in" rows="8" data-edit maxlength="5000" placeholder="${UII18n.t("（空）")}">${esc(value)}</textarea></label>
         <div class="actions"><span class="result muted small">${value.length} ${UII18n.t("字")}</span>
           <button class="btn" data-clear ${m.summary || value ? "" : "disabled"}>${UII18n.t("清空")}</button>
           <button class="btn primary" data-save>${UII18n.t("保存")}</button></div></div>`;
@@ -1578,8 +1596,8 @@ async function renderMemory(root) {
           body: JSON.stringify({ device: dev, summary: text, version: x.memory.version }) });
         const r = await res.json().catch(() => ({}));
         if (res.status === 401) return toast(EXPIRED + UII18n.t("。请先复制改好的内容，再刷新页面重新登录"), true);
-        if (res.status === 409) { x.memory = r.memory; toast(r.error, true); draw(); return; }
-        if (!res.ok || r.ok === false) return toast(r.error || UII18n.t("保存失败"), true);
+        if (res.status === 409) { x.memory = r.memory; toast(UII18n.msg(r) ?? UII18n.text(r.error), true); draw(); return; }
+        if (!res.ok || r.ok === false) return toast(UII18n.msg(r) ?? (UII18n.text(r.error) || UII18n.t("保存失败")), true);
         x.memory = r.memory; delete edits[dev];
         toast(text ? UII18n.t("已保存，下一次提问就用新的记忆") : UII18n.t("记忆已清空")); draw();
       });
@@ -1594,18 +1612,21 @@ async function renderCallNames(root) {
   const d = await api("call-names");
   let models = d.models.map((m) => ({ ...m, aliases: [...m.aliases] }));
   let learning = d.learning, devices = d.devices;
-  const labelOf = (entry) => (d.targets.find((t) => t.entry === entry) || models.find((m) => m.entry === entry) || { label: entry }).label;
+  // 模型的标签：msg 物件（页面翻译）或条目名（配置里的值，原样显示）
+  const labelOf = (entry) => { const x = d.targets.find((t) => t.entry === entry) || models.find((m) => m.entry === entry);
+    return x ? x.label_msg || x.label : entry; };
   setOnline(devices);
   root.innerHTML = `
     <div class="page-head"><div><h1>${UII18n.t("呼名")}</h1><p class="sub">${UII18n.t("唤醒设备后，句子开头说“嗨 + 称呼”，就换成对应的模型回答；之后直接说话也交给它，直到叫别的称呼。每个模型只记得跟自己的对话。")}
-      ${UII18n.t("只说称呼时只切换模型、回一声“")}${esc(d.reply)}”，${UII18n.t("不启动 Claude；说出第一句话时才启动，并判断要不要接上次的对话。完整经过见")}<a href="#how">${UII18n.t("工作原理")}</a>。</p></div>
+      ${UII18n.msg({ msg_key: "只说称呼时只切换模型、回一声“{reply}”，不启动 Claude；说出第一句话时才启动，并判断要不要接上次的对话。完整经过见<a href=\"#how\">工作原理</a>。", msg_params: { reply: esc(d.reply) } })}</p></div>
       <span class="pill ${d.enabled ? "ok" : ""}">${d.enabled ? UII18n.t("已开启") : UII18n.t("已关闭")}</span></div>
     <div class="card panel">
       <label class="switch" style="margin-top:0"><input type="checkbox" id="cn-enabled" ${d.enabled ? "checked" : ""}><span>${UII18n.t("开启呼名")}</span>
         <small>${UII18n.t("关闭后，“嗨 + 称呼”会当作普通的话交给当前模型")}</small></label>
       <label class="f" style="margin-top:16px">${UII18n.t("只说称呼时的回复")}<span class="hint">${UII18n.t("只说“嗨 + 称呼”时，服务端切换模型后直接回这句，不启动模型。越短越快，中间的标点会去掉、一次播完")}</span>
         <input class="in" id="cn-reply" value="${esc(d.reply)}" maxlength="40"></label>
-      <p class="muted small" style="margin:12px 0 0">${UII18n.t("语音识别常把称呼听成别的写法（比如 Claude 会听成 cloud），每种写法都要列出来。开头的“")}${esc(d.prefixes.join(" / "))}”${UII18n.t("不用写。设备第一次连上时用后台默认的模型（")}${esc(labelOf(d.default) || d.default || UII18n.t("未设置"))}），${UII18n.t("之后记住每台设备上次叫的模型。")}</p>
+      <p class="muted small" style="margin:12px 0 0">${esc(UII18n.msg({ msg_key: "语音识别常把称呼听成别的写法（比如 Claude 会听成 cloud），每种写法都要列出来。开头的“{prefixes}”不用写。设备第一次连上时用后台默认的模型（{model}），之后记住每台设备上次叫的模型。",
+        msg_params: { prefixes: d.prefixes.join(" / "), model: d.default ? labelOf(d.default) : { msg_key: "未设置" } } }))}</p>
     </div>
     <div id="cn-models"></div>
     <div class="card panel" id="cn-add-box" style="margin-top:16px"></div>
@@ -1617,17 +1638,17 @@ async function renderCallNames(root) {
     a = String(a || "").trim().toLowerCase();
     if (!a) return;
     const owner = models.find((x) => x.aliases.includes(a));
-    if (owner && owner !== m) { toast(`“${a}”${UII18n.t("已经是")} ${owner.label} ${UII18n.t("的称呼")}`, true); return; }
+    if (owner && owner !== m) { toast(UII18n.msg({ msg_key: "“{alias}”已经是 {model} 的称呼", msg_params: { alias: a, model: owner.label_msg || owner.label } }), true); return; }
     if (!m.aliases.includes(a)) m.aliases.push(a);
   };
 
   const learnHtml = (m) => {
     const mine = learning.target === m.entry;
     const samples = mine ? learning.samples || [] : [];
-    const say = esc(m.aliases[0] || m.label);
+    const say = m.aliases[0] || m.label_msg || m.label;
     let html = "";
     if (mine && learning.active) {
-      html = `<div class="banner info" style="margin:12px 0">${UII18n.t("正在录入：先唤醒设备，再说“嗨")} ${say}”，${UII18n.t("每说一遍等设备回答“收到”再说下一遍。")}
+      html = `<div class="banner info" style="margin:12px 0">${esc(UII18n.msg({ msg_key: "正在录入：先唤醒设备，再说“嗨 {name}”，每说一遍等设备回答“收到”再说下一遍。", msg_params: { name: say } }))}
         ${UII18n.t("已录")} ${samples.length}/${learning.count} ${UII18n.t("遍，还剩")} ${learning.seconds_left} ${UII18n.t("秒。")}</div>
         <button class="btn sm" data-stop>${UII18n.t("停止录入")}</button>`;
     } else if (learning.active) {
@@ -1636,7 +1657,7 @@ async function renderCallNames(root) {
       html = UII18n.t("<p class=\"muted small\" style=\"margin:12px 0 0\">用设备录入：没有设备在线。先唤醒设备，再刷新本页。</p>");
     } else {
       html = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
-          ${devices.length > 1 ? `<select class="in" data-device style="max-width:280px">${devices.map((x) => `<option value="${esc(x.session_id)}">${esc(x.device_id || x.session_id)}（${esc(x.ip || "")}）</option>`).join("")}</select>` : ""}
+          ${devices.length > 1 ? `<select class="in" data-device style="max-width:280px">${devices.map((x) => `<option value="${esc(x.session_id)}">${esc(UII18n.msg({ msg_key: "{device}（{ip}）", msg_params: { device: x.device_id || x.session_id, ip: x.ip || "" } }))}</option>`).join("")}</select>` : ""}
           <button class="btn sm" data-learn>${UII18n.t("用设备录入")}</button>
           <span class="muted small">${UII18n.t("对着设备说 3 遍“嗨 + 称呼”，按你的发音记下语音识别听到的写法；录入期间的话不会交给模型")}</span></div>`;
     }
@@ -1656,7 +1677,7 @@ async function renderCallNames(root) {
   const draw = () => {
     $("cn-models").innerHTML = models.map((m, mi) => `
       <div class="card" data-model="${mi}" style="margin-top:16px">
-        <div class="card-head"><h2>${esc(m.label)}</h2><span>
+        <div class="card-head"><h2>${esc(UII18n.text(m.label_msg || m.label))}</h2><span>
           ${m.entry === d.default ? UII18n.t("<span class=\"pill\">默认模型</span>") : ""}
           ${m.ready ? "" : UII18n.t("<span class=\"pill err\">还没配置好</span>")}</span></div>
         <div class="panel" style="padding-top:12px">
@@ -1694,13 +1715,13 @@ async function renderCallNames(root) {
     const left = d.targets.filter((t) => !findModel(t.entry));
     $("cn-add-box").innerHTML = left.length
       ? `<div class="section-title" style="margin-top:0">${UII18n.t("再呼叫一个模型")}</div>
-         <div style="display:flex;gap:8px;max-width:440px"><select class="in" id="cn-pick">${left.map((t) => `<option value="${esc(t.entry)}">${esc(t.label)}</option>`).join("")}</select>
+         <div style="display:flex;gap:8px;max-width:440px"><select class="in" id="cn-pick">${left.map((t) => `<option value="${esc(t.entry)}">${esc(UII18n.text(t.label_msg || t.label))}</option>`).join("")}</select>
          <button class="btn sm" id="cn-add-model">${UII18n.t("添加")}</button></div>
          <p class="muted small" style="margin:8px 0 0">${UII18n.t("只能选已经配置好的模型。要加别的厂商，先到“大模型”页填好接口地址、模型和 API Key。")}</p>`
       : `<p class="muted small" style="margin:0">${UII18n.t("已配置好的模型都加上了。要加别的厂商，先到“大模型”页填好接口地址、模型和 API Key。")}</p>`;
     if ($("cn-add-model")) $("cn-add-model").onclick = () => {
       const t = d.targets.find((x) => x.entry === $("cn-pick").value);
-      const m = { entry: t.entry, label: t.label, aliases: [], ready: true };
+      const m = { entry: t.entry, label: t.label, label_msg: t.label_msg, aliases: [], ready: true };
       models.push(m);
       t.defaults.filter((a) => !allAliases().includes(a)).forEach((a) => addAlias(m, a));  // 已被别的模型占用的跳过
       draw();
@@ -1721,7 +1742,7 @@ async function renderCallNames(root) {
     models: models.map((m) => ({ entry: m.entry, aliases: m.aliases })) });
   page.dirty = snapshot(values);
   $("cn-save").onclick = (e) => busy(e.target, async () => {
-    try { const r = await api("call-names", values()); toast(r.note); page.dirty = null; await openPage("calls", true); }
+    try { const r = await api("call-names", values()); toast(UII18n.text(r.note_msg || r.note)); page.dirty = null; await openPage("calls", true); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -1730,7 +1751,7 @@ async function renderCallNames(root) {
 
 const fmtTime = (v) => (v ? new Date(typeof v === "number" ? v * 1000 : v).toLocaleString() : "");
 // 版本只显示时间和短提交号，不显示提交说明（用户定）
-const commitLine = (c) => c && c.short ? `${esc(fmtTime(c.date))} <span class="muted small">（${esc(c.short)}）</span>` : UII18n.t("<span class=\"muted\">未知</span>");
+const commitLine = (c) => c && c.short ? `${esc(fmtTime(c.date))} <span class="muted small">${esc(UII18n.msg({ msg_key: "（{commit}）", msg_params: { commit: c.short } }))}</span>` : UII18n.t("<span class=\"muted\">未知</span>");
 const UPDATE_NOTE = UII18n.t("更新期间网关会重启，一般 1～2 分钟，在线设备会断开一下再自动连上，正在进行的对话会中断。");
 
 async function renderUpdate(root) {
@@ -1739,8 +1760,8 @@ async function renderUpdate(root) {
   const src = d.source || {};
   root.innerHTML = `
     <div class="page-head"><div><h1>${UII18n.t("更新网关")}</h1><p class="sub">${UII18n.t("和 GitHub 上的版本比较，有新版本时由你决定什么时候更新，不会自动更新。")}</p></div>
-      ${d.unsupported ? "" : UII18n.t("<button class=\"btn\" id=\"up-check\">检查更新</button>")}</div>
-    ${d.unsupported ? `<div class="banner warn">${esc(d.unsupported)}</div>` : ""}
+      ${UII18n.text(d.unsupported) ? "" : UII18n.t("<button class=\"btn\" id=\"up-check\">检查更新</button>")}</div>
+    ${UII18n.text(d.unsupported) ? `<div class="banner warn">${esc(UII18n.text(d.unsupported_msg || d.unsupported))}</div>` : ""}
     <div class="card panel"><div class="kv two">
       <div class="k">${UII18n.t("当前版本")}</div><div>${commitLine(d.current)}</div>
       ${d.running && d.running.short ? `<div class="k">${UII18n.t("运行中")}</div><div>${commitLine(d.running)} <span class="pill warn">${UII18n.t("和当前版本不一样，重启服务后才换成当前版本")}</span></div>` : ""}
@@ -1748,7 +1769,7 @@ async function renderUpdate(root) {
       ${src.url ? `<div class="k">${UII18n.t("更新来源")}</div><div><code>${esc(src.url)}</code> ${UII18n.t("的")} <code>${esc(src.branch)}</code> ${UII18n.t("分支")}</div>` : ""}
     </div></div>
     <div id="up-last"></div>
-    ${d.unsupported ? "" : UII18n.t("<div class=\"section-title\">新版本</div><div class=\"card\" id=\"up-box\"></div>")}`;
+    ${UII18n.text(d.unsupported) ? "" : UII18n.t("<div class=\"section-title\">新版本</div><div class=\"card\" id=\"up-box\"></div>")}`;
   renderLastUpdate(d.update);
   if (d.unsupported) return;
   const check = () => busy($("up-check"), async () => {
@@ -1769,11 +1790,11 @@ function renderLastUpdate(u) {
   let html = "";
   if (u.state === "done") {
     html = u.changed
-      ? `<div class="banner info">${esc(when)} ${UII18n.t("更新成功：")}${esc(u.from.short || "")} → ${esc(u.to.short || "")}。</div>`
+      ? `<div class="banner info">${esc(UII18n.msg({ msg_key: "{when} 更新成功：{from} → {to}。", msg_params: { when, from: u.from.short || "", to: u.to.short || "" } }))}</div>`
       : `<div class="banner info">${esc(when)} ${UII18n.t("检查过，已经是最新版本，没有改动。")}</div>`;
     if (u.restart_needed) html += UII18n.t("<div class=\"banner warn\">代码已更新，但服务是手动启动的，没有自动重启：请在运行网关的终端按 Ctrl+C 停止，再运行 scripts/start.sh。</div>");
   } else {
-    html = `<div class="banner ${u.state === "failed" ? "err" : "warn"}">${esc(when)} ${UII18n.t("更新没有完成：")}${esc(u.error || "")}${u.changed ? "" : UII18n.t("。网关仍是原来的版本")}</div>`;
+    html = `<div class="banner ${u.state === "failed" ? "err" : "warn"}">${esc(when)} ${UII18n.t("更新没有完成：")}${esc(UII18n.t(u.error || ""))}${u.changed ? "" : UII18n.t("。网关仍是原来的版本")}</div>`;
   }
   // 没成功时展开输出：原因（如"按上面的提示处理"）就在里面
   if (u.log && u.log.length) html += `<details class="adv" style="margin:0 0 14px;padding:0;border:0" ${u.state === "done" ? "" : "open"}><summary>${UII18n.t("更新输出")}</summary><pre class="update-log">${esc(u.log.join("\n"))}</pre></details>`;
@@ -1790,7 +1811,7 @@ function drawCheck(root, c) {
   } else if (c.state === "available" || c.state === "dirty") {
     box.innerHTML = `<div class="card-head"><h2>${UII18n.t("有新版本")}</h2>${when}</div><div class="panel">${UII18n.t("最新版本：")}${commitLine(c.latest)}</div>
       <div class="panel" style="border-top:1px solid var(--line)">
-        ${c.state === "dirty" ? `<div class="banner warn">${esc(c.message)}<br><code>${esc((c.files || []).join("  "))}</code></div>`
+        ${c.state === "dirty" ? `<div class="banner warn">${esc(UII18n.text(c.message_msg || c.message))}<br><code>${esc((c.files || []).join("  "))}</code></div>`
           : `<p class="muted small" style="margin:0 0 4px">${UPDATE_NOTE}${UII18n.t("依赖有变化时会自动补装；补装失败或新版本起不来时自动退回现在的版本。")}</p>`}
         <div class="actions" style="margin-top:10px"><button class="btn primary" id="up-start" ${c.state === "dirty" ? "disabled" : ""}>${UII18n.t("立即更新")}</button></div></div>`;
     if (c.state === "available") $("up-start").onclick = (e) => busy(e.target, async () => {
@@ -1800,7 +1821,7 @@ function drawCheck(root, c) {
     });
   } else {
     const cls = c.state === "error" ? "err" : "warn";
-    box.innerHTML = `<div class="panel"><div class="banner ${cls}" style="margin:0">${esc(c.message)}</div>${when ? `<p style="margin:8px 0 0">${when}</p>` : ""}</div>`;
+    box.innerHTML = `<div class="panel"><div class="banner ${cls}" style="margin:0">${esc(UII18n.text(c.message_msg || c.message))}</div>${when ? `<p style="margin:8px 0 0">${when}</p>` : ""}</div>`;
   }
 }
 
@@ -1831,7 +1852,7 @@ function renderUpdating(root, u) {
     if (d.update.state === "running") return show(d.update);
     clearInterval(page.timer); page.timer = null;
     if (d.update.state === "done" && d.update.changed && !d.update.restart_needed) {
-      toast(`${UII18n.t("已更新到")} ${d.update.to.short}，${UII18n.t("页面马上刷新")}`);
+      toast(UII18n.msg({ msg_key: "已更新到 {commit}，页面马上刷新", msg_params: { commit: d.update.to.short } }));
       setTimeout(() => location.reload(), 1500);
     } else {
       await openPage("update", true);

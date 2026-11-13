@@ -1320,8 +1320,10 @@ class AdminHandler:
         for d in devices:
             d["emotion_test"] = self._emotion_progress(d["session_id"])
             # 这台设备此刻在跟谁说话（呼名切到的模型）；和大模型页的全局默认是两回事
-            d["model_label"] = ("Claude Code" if d.get("model") == llm_router.CLAUDE_CLI_ENTRY
-                                else llm_router.model_label(d["model"])) if d.get("model") else ""
+            cli = d.get("model") == llm_router.CLAUDE_CLI_ENTRY
+            d["model_label"] = ("Claude Code" if cli else llm_router.model_label(d["model"])) if d.get("model") else ""
+            if d.get("model"):
+                d["model_label_msg"] = msg("{value}", value="Claude Code") if cli else llm_router.model_label_msg(d["model"])
         return self._json({"ok": True, "devices": devices, "now": int(time.time()),
                            "emotions": [{"emotion": name, "emoji": emoji, "label": catalog.EMOTION_LABELS.get(name, name)}
                                         for emoji, name in EMOJI_MAP.items()]})
