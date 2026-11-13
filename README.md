@@ -13,6 +13,9 @@
   <a href="https://github.com/justhalfbit/xiaozhi-hub-server/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/justhalfbit/xiaozhi-hub-server?style=flat-square" /></a>
   <a href="https://x.com/justhalfbit"><img alt="X (Twitter)" src="https://img.shields.io/badge/X-%40justhalfbit-000000?style=flat-square&logo=x&logoColor=white" /></a>
 </p>
+
+> Oh I'm Smart 网关：基于 xiaozhi-hub-server（MIT），加上繁体中文、英文界面和 ThinkSmart View 的设定。出处见 [NOTICE](NOTICE)。
+
 <p align="center">
   <a href="README.md">简体中文</a> |
   <a href="README.en.md">English</a>
@@ -90,7 +93,7 @@ stdio 使用 `command`、`args` 與可選的 `env`，以網關帳號執行，只
 **macOS / Linux**，在终端运行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ohimsmart/oh-im-smart-gateway/main/scripts/bootstrap.sh | bash
 ```
 
 代码装到 `~/xiaozhi-hub-server`，结束时询问是否开机自启（直接回车就是开启）。macOS 缺 ffmpeg、opus 时会用 [Homebrew](https://brew.sh) 安装，这种情况要先装好 Homebrew。
@@ -98,7 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main
 **Windows 10 / 11**，在 PowerShell 里运行：
 
 ```powershell
-git clone --depth 1 https://github.com/justhalfbit/xiaozhi-hub-server.git
+git clone --depth 1 https://github.com/ohimsmart/oh-im-smart-gateway.git xiaozhi-hub-server
 cd xiaozhi-hub-server
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1   # 安装
 powershell -ExecutionPolicy Bypass -File scripts\start.ps1     # 启动

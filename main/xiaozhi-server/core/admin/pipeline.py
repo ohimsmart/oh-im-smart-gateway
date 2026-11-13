@@ -75,7 +75,7 @@ def _system_prompt_of(conn) -> str:
 
 # ---------- 流程 ----------
 
-DESIGN_DOC_URL = "https://github.com/justhalfbit/xiaozhi-hub-server/blob/main/hub-docs/design.md"
+DESIGN_DOC_URL = "https://github.com/ohimsmart/oh-im-smart-gateway/blob/main/hub-docs/design.md"
 
 def _voice_name(voice: str) -> str:
     info = next((v for v in catalog.EDGE_VOICES if v["value"] == voice), None)

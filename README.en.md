@@ -13,6 +13,9 @@
   <a href="https://github.com/justhalfbit/xiaozhi-hub-server/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/justhalfbit/xiaozhi-hub-server?style=flat-square" /></a>
   <a href="https://x.com/justhalfbit"><img alt="X (Twitter)" src="https://img.shields.io/badge/X-%40justhalfbit-000000?style=flat-square&logo=x&logoColor=white" /></a>
 </p>
+
+> Oh I'm Smart gateway: based on xiaozhi-hub-server (MIT), with Traditional Chinese and English interfaces and ThinkSmart View settings. See [NOTICE](NOTICE).
+
 <p align="center">
   <a href="README.md">简体中文</a> |
   <a href="README.en.md">English</a>
@@ -70,7 +73,7 @@ Before you begin: the computer and the device must be on the same LAN, and git m
 **macOS / Linux**, in a terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ohimsmart/oh-im-smart-gateway/main/scripts/bootstrap.sh | bash
 ```
 
 It installs to `~/xiaozhi-hub-server` and, at the end, asks whether to start the server at login (press Enter to accept). On macOS, missing ffmpeg and opus are installed with [Homebrew](https://brew.sh), so install Homebrew first in that case.
@@ -78,7 +81,7 @@ It installs to `~/xiaozhi-hub-server` and, at the end, asks whether to start the
 **Windows 10 / 11**, in PowerShell:
 
 ```powershell
-git clone --depth 1 https://github.com/justhalfbit/xiaozhi-hub-server.git
+git clone --depth 1 https://github.com/ohimsmart/oh-im-smart-gateway.git xiaozhi-hub-server
 cd xiaozhi-hub-server
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1   # install
 powershell -ExecutionPolicy Bypass -File scripts\start.ps1     # start

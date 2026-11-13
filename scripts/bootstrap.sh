@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # xiaozhi-hub-server 远程一键安装（macOS / Linux）
-# 用法：curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main/scripts/bootstrap.sh | bash
+# 用法：curl -fsSL https://raw.githubusercontent.com/ohimsmart/oh-im-smart-gateway/main/scripts/bootstrap.sh | bash
 #   下载代码到 ~/xiaozhi-hub-server（只下载运行需要的目录），然后运行 scripts/install.sh。
 #   已经装过时，改为运行 scripts/update.sh 更新。
 # 可选环境变量：
 #   XIAOZHI_HUB_DIR     安装目录，默认 ~/xiaozhi-hub-server
-#   XIAOZHI_HUB_REPO    仓库地址，默认 https://github.com/justhalfbit/xiaozhi-hub-server.git
+#   XIAOZHI_HUB_REPO    仓库地址，默认 https://github.com/ohimsmart/oh-im-smart-gateway.git
 #   XIAOZHI_HUB_BRANCH  分支，默认 main
 #   以及 install.sh 支持的 UV_INDEX_URL、HF_ENDPOINT、ASSUME_YES
 set -euo pipefail
@@ -13,7 +13,7 @@ set -euo pipefail
 # 整个脚本放在函数里、最后一行才调用：curl 下载中断时，bash 不会执行半截脚本
 main() {
   local dir="${XIAOZHI_HUB_DIR:-$HOME/xiaozhi-hub-server}"
-  local repo="${XIAOZHI_HUB_REPO:-https://github.com/justhalfbit/xiaozhi-hub-server.git}"
+  local repo="${XIAOZHI_HUB_REPO:-https://github.com/ohimsmart/oh-im-smart-gateway.git}"
   local branch="${XIAOZHI_HUB_BRANCH:-main}"
   # 只检出运行需要的目录（根目录的文件总会检出）。改动时 update.sh 里的 SPARSE_PATHS 要一起改
   local sparse_paths=(main/xiaozhi-server scripts hub-docs)
@@ -32,8 +32,9 @@ main() {
   info "$(git --version)"
 
   if [[ -e "$dir" ]]; then
-    if git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 \
-      && [[ "$(git -C "$dir" remote get-url origin 2>/dev/null || true)" == *xiaozhi-hub-server* ]]; then
+    local origin=""
+    git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 && origin="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+    if [[ "$origin" == *xiaozhi-hub-server* || "$origin" == *oh-im-smart-gateway* ]]; then
       # 已经装过（或上次安装中途失败）：update.sh 拉取新代码，并在安装没完成时接着装完
       [[ -f "$dir/scripts/update.sh" ]] || fail "${dir} 是旧版本，还没有更新脚本。请先运行 git -C \"$dir\" pull，再重新运行本命令"
       step "已经安装在 ${dir}，改为更新到最新版本"
