@@ -213,7 +213,7 @@ class AdminHandler:
 
     async def handle_i18n_asset(self, request):
         asset = request.match_info['asset']
-        if asset not in ('runtime.js', 'zh-Hant.js'):
+        if asset not in ('runtime.js', 'zh-Hant.js', 'en.js'):
             raise web.HTTPNotFound()
         return web.FileResponse(STATIC_DIR / 'i18n' / asset, headers=SECURITY_HEADERS)
 
