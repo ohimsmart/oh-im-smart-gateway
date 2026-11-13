@@ -354,14 +354,18 @@ function toast(msg, isError, ms) {
 async function api(path, body, quiet) {
   const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
   let res;
-  try { res = await fetch("/admin/api/" + path, opts); } catch (e) { throw new Error(UII18n.t("连不上服务，请确认服务还在运行")); }
+  try { res = await fetch("/admin/api/" + path, opts); }
+  catch (e) { const err = new Error(UII18n.t("连不上服务，请确认服务还在运行")); err.offline = true; throw err; }
   let data = {};
   try { data = await res.json(); } catch (e) {}
   if (res.status === 401 && path !== "login") {
     if (quiet && page.dirty && page.dirty()) { const e = new Error(EXPIRED); e.expired = true; throw e; }
     page.dirty = null; await route(); throw new Error(EXPIRED + UII18n.t("，请重新登录"));
   }
-  if (!res.ok || data.ok === false) throw new Error(data.error || (UII18n.t("请求失败：") + res.status));
+  if (!res.ok || data.ok === false) {
+    const keyed = UII18n.msg(data);   // 有 msg_key 时用它翻译，否则用原有的 error 字符串
+    throw new Error(keyed !== null ? keyed : data.error ? UII18n.t(data.error) : UII18n.t("请求失败：") + res.status);
+  }
   return data;
 }
 
@@ -464,9 +468,9 @@ function setOnline(devices, reason = OFFLINE) {
   $("online-short").textContent = !devices ? (reason === OFFLINE ? UII18n.t("已断开") : UII18n.t("需登录")) : devices.length ? `${devices.length} ${UII18n.t("台")}` : UII18n.t("无设备");  // 窄屏用
   $("online-dot").parentElement.title = $("online-text").textContent;
 }
-const OFFLINE = UII18n.t("连不上服务");  // api() 连不上服务时抛出的错误以这几个字开头
+const OFFLINE = UII18n.t("连不上服务");  // 侧边栏显示用；api() 连不上服务时在错误上标 offline
 const EXPIRED = UII18n.t("登录已过期");
-const isOffline = (e) => String(e && e.message).startsWith(OFFLINE);
+const isOffline = (e) => Boolean(e && e.offline);
 let expiredWarned = false;
 // 后台定时查询出错时：连不上服务、登录过期（页面上有没保存的修改）都要在侧边栏如实显示
 function onDevicesError(e) {

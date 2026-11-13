@@ -26,6 +26,7 @@ from aiohttp import web
 from config.logger import setup_logging
 from core.admin import auth, catalog, config_store, connections, pages, pipeline, plugin_settings, updater, speech_settings, speech_probe, mcp_settings
 from core.admin.grokbot import GrokBotAdmin
+from core.admin.i18n_msg import KeyedError, UIError, label, msg, render
 from core.admin.status import _claude_version, collect_status
 from core.agent import chat_history, llm_router, reports, reply_language
 from core.agent.agent_session import ErrorKind
@@ -165,7 +166,12 @@ class AdminHandler:
         return web.json_response(data, status=status, headers=SECURITY_HEADERS)
 
     def _error(self, message, status):
-        return self._json({"ok": False, "error": message}, status)
+        """message 可以是字串、msg() 物件或例外；KeyedError 和 msg() 物件會多帶 msg_key、msg_params。"""
+        if isinstance(message, KeyedError):
+            return self._json({"ok": False, "error": str(message), **message.payload()}, status)
+        if isinstance(message, dict):
+            return self._json({"ok": False, "error": render(message), **message}, status)
+        return self._json({"ok": False, "error": str(message)}, status)
 
     @staticmethod
     async def _blocking(func, *args, **kwargs):
@@ -387,7 +393,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_call_names, body, merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         note = "已保存，马上生效" if changed else "没有修改"
         if changed:
             new_merged = await self._blocking(self._merged)
@@ -448,7 +454,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_grok_bots, body, merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         note = "已保存，马上生效" if changed else "没有修改"
         if changed:
             new_merged = await self._blocking(self._merged)
@@ -527,7 +533,7 @@ class AdminHandler:
             status = await self._blocking(self.updater.start)
         except updater.UpdateError as e:
             self.sessions_handover.unlink(missing_ok=True)
-            return self._error(str(e), 409)
+            return self._error(e, 409)
         except OSError as e:
             self.sessions_handover.unlink(missing_ok=True)
             return self._error(f"启动更新失败：{e}", 500)
@@ -561,7 +567,7 @@ class AdminHandler:
         except KeyError:
             return self._error("配置里没有 ClaudeCLI 条目", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         self.logger.bind(tag=TAG).info(f"管理后台更新了 Claude CLI 设置: {', '.join(changed) or '无变化'}")
         return self._json({"ok": True, "changed": changed,
                            **await self._apply_if_selected("LLM", pages.CLAUDE_CLI_ENTRY, changed)})
@@ -577,7 +583,7 @@ class AdminHandler:
         except KeyError:
             return self._error("不支持这个厂商", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         entry = catalog.VENDOR_BY_ID[vendor]["entry"]
         applied = await self._apply_if_selected("LLM", entry, changed)
         # 用时记进日志：保存曾经要等十几秒，原因没能复现
@@ -633,7 +639,7 @@ class AdminHandler:
         except KeyError:
             return self._error("不支持这个厂商", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         result = await self._blocking(self._test_llm, config)
         return self._json(result) if result["ok"] else self._error(result["error"], 400)
 
@@ -945,7 +951,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_doubao, body, merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         self.logger.bind(tag=TAG).info(f"管理后台更新了豆包语音识别设置: {', '.join(changed) or '无变化'}")
         return self._json({"ok": True, "changed": changed,
                            **await self._apply_if_selected("ASR", catalog.DOUBAO_ASR_ENTRY, changed)})
@@ -959,7 +965,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             config = pages.doubao_test_config(body, merged)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         result = await check_connection(config)
         return self._json(result) if result["ok"] else self._error(result["error"], 400)
 
@@ -971,7 +977,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_hotwords, body.get("words"), merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         if not changed:
             return self._json({"ok": True, "changed": [], "note": "没有修改"})
         self.logger.bind(tag=TAG).info("管理后台更新了热词")
@@ -991,7 +997,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_corrections, body.get("items"), merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         if changed:
             self._push_config("asr_corrections", (await self._blocking(self._merged)).get("asr_corrections") or {})
             self.logger.bind(tag=TAG).info("管理后台更新了识别纠错表")
@@ -1005,7 +1011,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             value = await self._blocking(pages.save_vad_silence, body.get("silence_ms"), merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         if value is None:
             return self._json({"ok": True, "changed": [], "note": "没有修改"})
         name = merged["selected_module"]["VAD"]
@@ -1049,7 +1055,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(speech_settings.save, section, body, merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         name = speech_settings.SPEECH[section]['entry']
         return self._json({'ok': True, 'changed': changed,
                            **await self._apply_if_selected(section, name, changed)})
@@ -1064,7 +1070,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             result = await speech_probe.test(section, body, merged)
         except (ValueError, RuntimeError) as exc:
-            return self._error(str(exc), 400)
+            return self._error(exc, 400)
         except Exception:
             return self._error('無法完成語音 API 測試，請檢查服務網址與網路連線', 400)
         return self._json({'ok': True, **result})
@@ -1083,7 +1089,7 @@ class AdminHandler:
         try:
             await self._blocking(mcp_settings.save, self.mcp_config_path, body.get('name'), body.get('config'), delete)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         return self._json({'ok': True, **await self._blocking(mcp_settings.describe, self.mcp_config_path)})
 
     async def handle_mcp_save(self, request):
@@ -1115,7 +1121,7 @@ class AdminHandler:
             merged = await self._blocking(self._merged)
             changed = await self._blocking(pages.save_tts_voice, str(body.get("voice") or ""), merged, self.config_path)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         name = (merged.get("selected_module") or {}).get("TTS")
         self.logger.bind(tag=TAG).info(f"管理后台更新了音色: {body.get('voice')}")
         return self._json({"ok": True, "changed": changed, **await self._apply_if_selected("TTS", name, changed)})
@@ -1179,7 +1185,7 @@ class AdminHandler:
         except KeyError:
             return self._error(f"配置里没有 {mode}", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         if not result["ok"]:
             return self._error(result["note"], 400)
         if result["note"] == "已经在使用" and notes:
@@ -1208,7 +1214,7 @@ class AdminHandler:
         except KeyError:
             return self._error("没有这个插件设置", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         if not changed:
             return self._json({"ok": True, "changed": [], "note": "没有修改",
                                "configured": plugin_settings.configured(merged, settings_id)})
@@ -1231,7 +1237,7 @@ class AdminHandler:
         except KeyError:
             return self._error("这个插件没有测试", 404)
         except ValueError as e:
-            return self._error(str(e), 400)
+            return self._error(e, 400)
         return self._json({"ok": True, **result})
 
     # ---------- 在线设备与表情测试 ----------
