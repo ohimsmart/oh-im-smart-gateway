@@ -63,10 +63,11 @@ ADMIN = SERVER / "core" / "admin"
 # 後台之外、但錯誤會顯示在後台的範圍：{檔案: {函式名稱}}，None 表示整個檔案
 EXTRA = {SERVER / "core" / "providers" / "asr" / "doubao_stream.py": {"check_connection"},
          SERVER / "plugins_func" / "functions" / "web_search.py": None,
-         SERVER / "plugins_func" / "functions" / "get_weather.py": None}
+         SERVER / "plugins_func" / "functions" / "get_weather.py": None,
+         SERVER / "core" / "agent" / "grokbot_client.py": None}   # GrokBotError 經 bots_error_msg、登入結果顯示
 # 第一個參數是訊息鍵的呼叫：msg() 和 KeyedError 的每一個子類（新增子類時要加在這裏，
 # test_key_constructors_cover_every_keyed_error 會檢查）
-KEY_CONSTRUCTORS = {"msg", "UIError", "KeyedError", "UpdateError", "SearchError", "WeatherError"}
+KEY_CONSTRUCTORS = {"msg", "UIError", "KeyedError", "UpdateError", "SearchError", "WeatherError", "GrokBotError"}
 
 
 def python_sources():

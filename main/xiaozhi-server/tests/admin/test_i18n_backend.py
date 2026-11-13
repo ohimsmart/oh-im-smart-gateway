@@ -1,6 +1,7 @@
 """後端訊息：UIError 帶 key；錯誤回應帶 msg_key；英文介面顯示英文。"""
 import ast
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -55,12 +56,50 @@ async def test_failed_switch_response_carries_the_key(tmp_path):
     assert d["error"] == "配置里没有 ClaudeCLI"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="en.js in Task 7")
 @pytest.mark.asyncio
 async def test_failed_switch_shows_in_english(tmp_path):
     from tests.admin.i18n_node import render as render_js
     (out,) = render_js([await _use_missing_model(tmp_path)], "en")
     assert out and not has_chinese(out), out
+
+
+
+@pytest.mark.asyncio
+async def test_grokbot_list_error_shows_in_english(tmp_path):
+    """GrokBotError 經 bots_error_msg 到頁面：英文頁面整句是英文。"""
+    from core.admin.grokbot import GrokBotAdmin
+    from core.agent.agent_session import ErrorKind
+    from core.agent.grokbot_client import GrokBotError
+    from tests.admin.i18n_node import render as render_js
+
+    admin = GrokBotAdmin(tmp_path / "creds.json")
+
+    async def refuse():
+        raise GrokBotError("续期被拒绝（HTTP {status}），需要重新登录", ErrorKind.AUTH, status=401)
+
+    admin.client().list_agents = refuse
+    with pytest.raises(GrokBotError) as e:
+        await admin.fetch_bots()
+    assert e.value.detail == "续期被拒绝（HTTP 401），需要重新登录"
+    status = admin.status()
+    assert status["bots_error"] == e.value.detail
+    out = render_js([status["bots_error_msg"], msg("读取 Bot 列表失败：{error}", error=e.value.payload())], "en")
+    assert all(o and not has_chinese(o) and "401" in o for o in out), out
+    await admin.close()
+
+
+# msg()／KeyedError 的參數名不能是 key；SearchError、GrokBotError 自己還用了 kind（和 spoken）
+RESERVED = {"msg": {"key"}, "UIError": {"key"}, "KeyedError": {"key"}, "UpdateError": {"key"},
+            "WeatherError": {"key"}, "SearchError": {"key", "kind", "spoken"}, "GrokBotError": {"key", "kind"}}
+
+
+def test_message_templates_avoid_reserved_parameter_names():
+    assert set(RESERVED) == KEY_CONSTRUCTORS
+    bad = [f"{name}:{call.lineno}" for name, _lines, roots in python_sources() for root in roots
+           for call in key_calls(root)
+           if set(re.findall(r"\{(\w+)\}", call.args[0].value))
+           & RESERVED[call.func.id if isinstance(call.func, ast.Name) else call.func.attr]]
+    assert not bad, bad
 
 
 ALLOW = Path(__file__).with_name("i18n-fstring-allow.txt")

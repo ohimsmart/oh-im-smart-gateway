@@ -284,7 +284,7 @@
 </head>
 <body>
 <label style="position:fixed;top:10px;right:14px;z-index:100;font-size:13px">界面语言
-  <select data-language-picker data-no-i18n aria-label="界面语言"><option value="zh-Hans">简体中文</option><option value="zh-Hant">繁體中文</option></select>
+  <select data-language-picker data-no-i18n aria-label="界面语言"><option value="zh-Hans">简体中文</option><option value="zh-Hant">繁體中文</option><option value="en" data-no-i18n>English</option></select>
 </label>
 
 <div id="auth" class="auth hidden">
@@ -935,7 +935,7 @@ async function renderASR(root) {
     const using = d.choice === "doubao";
     box.innerHTML = `
       ${b.conflict ? `<div class="banner err">${UII18n.t("配置里已有一个叫")} ${esc(b.entry)} ${UII18n.t("的条目，但不是豆包流式识别，请在配置文件里改名或删掉它。")}</div>` : ""}
-      <p style="margin:0 0 14px">${UII18n.t("在")}<a href="https://console.volcengine.com/speech/service/10038" target="_blank" rel="noopener">${UII18n.t("火山引擎控制台")}</a>${UII18n.t("开通“豆包流式语音识别模型 2.0”后，把密钥填在这里。")}
+      <p style="margin:0 0 14px">${UII18n.t("在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制台</a>开通“豆包流式语音识别模型 2.0”后，把密钥填在这里。")}
         ${UII18n.t("新版控制台只有一个 API Key；旧版控制台是 APP ID 加 Access Token。")}</p>
       <div class="cli-row"><div class="cli-k">${UII18n.t("控制台版本")}</div><div>
         <div class="seg" id="db-auth"><button type="button" data-v="key" class="${b.auth === "key" ? "on" : ""}">${UII18n.t("新版 · API Key")}</button>
@@ -1506,7 +1506,7 @@ async function renderGrokBot(root) {
     <div class="section-title">Bot</div>
     <div class="card panel">
       ${!acc.logged_in ? UII18n.t("<p class=\"muted\" style=\"margin:0\">登录后再读取 Bot 列表。</p>") : `
-      ${UII18n.text(d.bots_error) ? `<div class="banner err">${UII18n.t("读取 Bot 列表失败：")}${esc(UII18n.text(d.bots_error))}</div>` : ""}
+      ${UII18n.text(d.bots_error) ? `<div class="banner err">${UII18n.t("读取 Bot 列表失败：")}${esc(UII18n.text(d.bots_error_msg || d.bots_error))}</div>` : ""}
       <p class="muted small" style="margin:0 0 4px">${bots ? esc(UII18n.msg({ msg_key: "列表读取于 {time}。", msg_params: { time: fmt(d.bots_at) } })) : UII18n.t("还没从云端读取 Bot 列表（会唤醒休眠的云端电脑，要几秒）。")}${UII18n.t("勾选保存后自动用 Bot 的名字做称呼；想改写法、或按你的发音录入，到")}<a href="#calls">${UII18n.t("呼名")}</a>${UII18n.t("页。名字含空格标点、或已被别的模型占用时不会自动配，要到呼名页手动加。")}</p>
       ${list.length ? list.map((b) => `<label class="switch" style="margin-top:8px"><input type="checkbox" data-bot="${esc(b.id)}" data-name="${esc(b.name)}" ${checked.has(b.id) ? "checked" : ""}>
           <span>${esc(b.name)}${b.busy ? UII18n.t(" <span class=\"pill\">忙</span>") : ""}${checked.has(b.id) ? (aliasesOf(b.id).length ? ` <span class="pill ok">${UII18n.t("称呼：")}${esc(joinList(aliasesOf(b.id)))}</span>` : UII18n.t(" <span class=\"pill warn\">还没配称呼</span>")) : ""}</span>

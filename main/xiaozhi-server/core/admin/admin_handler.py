@@ -444,7 +444,7 @@ class AdminHandler:
         try:
             bots = await self.grokbot.fetch_bots()
         except GrokBotError as e:
-            return self._error(msg("读取 Bot 列表失败：{error}", error=e.detail), 400 if e.kind == ErrorKind.AUTH else 502)
+            return self._error(msg("读取 Bot 列表失败：{error}", error=e.payload()), 400 if e.kind == ErrorKind.AUTH else 502)
         return self._json({"ok": True, "bots": bots, **self.grokbot.status()})
 
     async def handle_grokbot_bots(self, request: web.Request):

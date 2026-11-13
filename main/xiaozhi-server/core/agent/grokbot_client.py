@@ -31,6 +31,7 @@ from urllib.parse import urlencode, urlparse
 import aiohttp
 
 from config.config_loader import get_project_dir
+from core.admin.i18n_msg import KeyedError
 from core.agent.agent_session import ErrorKind
 
 BACKEND = "https://api2.cursor.sh"
@@ -55,11 +56,16 @@ AUTH_RETRY = 60  # 登录失效时事件流多久再试一次
 LOGIN_POLL_TIMEOUT = 60
 
 
-class GrokBotError(Exception):
-    def __init__(self, kind: ErrorKind, detail: str = ""):
-        super().__init__(detail or kind.value)
+class GrokBotError(KeyedError):
+    """key + params 是原因（后台翻译后显示）；detail 是填好参数的简中句子（日志、会话层用）。"""
+
+    def __init__(self, key: str, kind: ErrorKind, **params):
+        super().__init__(key, **params)
         self.kind = kind
-        self.detail = detail
+
+    @property
+    def detail(self) -> str:
+        return str(self)
 
 
 def default_credentials_path() -> Path:
@@ -239,7 +245,8 @@ class GrokBotClient:
                     parsed = raw.decode(errors="replace")[:300]
                 return res.status, res.headers, parsed
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            raise GrokBotError(ErrorKind.SERVER, f"{method} {urlparse(url).path}: {e!r}") from e
+            raise GrokBotError("{method} {path}: {error}", ErrorKind.SERVER, method=method, path=urlparse(url).path,
+                               error=repr(e)) from e
 
     # ----- 登录 -----
 
@@ -277,7 +284,7 @@ class GrokBotClient:
             return True
         if status == 403:
             return False
-        raise GrokBotError(ErrorKind.SERVER, f"auth/poll HTTP {status} {body}")
+        raise GrokBotError("auth/poll HTTP {status} {body}", ErrorKind.SERVER, status=status, body=str(body))
 
     async def poll_login(self, flow: LoginFlow, timeout: float = 900) -> bool:
         """轮询直到登录成功、被拒绝或超时。间隔 1 秒起每次乘 1.2，上限 10 秒（和桌面 App 一样）。"""
@@ -313,7 +320,7 @@ class GrokBotClient:
             if not force and self.creds.access_token and self.creds.expires_at - time.time() > REFRESH_AHEAD:
                 return
             if not self.creds.refresh_token:
-                raise GrokBotError(ErrorKind.AUTH, "没有 refresh token，需要重新登录")
+                raise GrokBotError("没有 refresh token，需要重新登录", ErrorKind.AUTH)
             used = self.creds.refresh_token
             status, _, body = await self._request("POST", self.backend + "/oauth/token", {
                 "client_id": CLIENT_ID, "grant_type": "refresh_token", "refresh_token": used,
@@ -326,8 +333,8 @@ class GrokBotClient:
                     return
                 if isinstance(body, dict) and body.get("shouldLogout") or status in (400, 401, 403):
                     self.creds.mark_needs_login()
-                    raise GrokBotError(ErrorKind.AUTH, f"续期被拒绝（HTTP {status}），需要重新登录")
-                raise GrokBotError(ErrorKind.SERVER, f"续期失败：HTTP {status} {body}")
+                    raise GrokBotError("续期被拒绝（HTTP {status}），需要重新登录", ErrorKind.AUTH, status=status)
+                raise GrokBotError("续期失败：HTTP {status} {body}", ErrorKind.SERVER, status=status, body=str(body))
             data = {k: v for k, v in self.creds._data.items() if k != "needsLogin"}
             data["accessToken"] = body["access_token"]
             if body.get("refresh_token"):
@@ -339,9 +346,9 @@ class GrokBotClient:
     async def fresh_token(self) -> str:
         self.creds.reload()
         if not self.creds.access_token:
-            raise GrokBotError(ErrorKind.AUTH, "还没登录 Grok Bot")
+            raise GrokBotError("还没登录 Grok Bot", ErrorKind.AUTH)
         if self.creds.needs_login:
-            raise GrokBotError(ErrorKind.AUTH, "Grok Bot 的登录已失效，需要重新登录")
+            raise GrokBotError("Grok Bot 的登录已失效，需要重新登录", ErrorKind.AUTH)
         if self.creds.expires_at - time.time() < REFRESH_AHEAD:
             await self.refresh()
         return self.creds.access_token
@@ -391,14 +398,15 @@ class GrokBotClient:
                     continue
                 if status in (401, 403):
                     self.creds.mark_needs_login()
-                    raise GrokBotError(ErrorKind.AUTH, f"服务端不认这个登录（HTTP {status}），需要重新登录")
+                    raise GrokBotError("服务端不认这个登录（HTTP {status}），需要重新登录", ErrorKind.AUTH, status=status)
                 if status != 200 or not isinstance(body, dict):
                     hint = hdrs.get("x-automation-failure-hint", "") if hdrs else ""
-                    raise GrokBotError(ErrorKind.SERVER, f"EnsureSandBox HTTP {status} {body} {hint}".strip())
+                    raise GrokBotError("EnsureSandBox HTTP {status} {body}", ErrorKind.SERVER, status=status,
+                                       body=f"{body} {hint}".strip())
                 if body.get("gatewayUrl") and body.get("gatewayToken"):
                     host = urlparse(body["gatewayUrl"]).hostname or ""
                     if not host.endswith(GATEWAY_SUFFIXES) and not host.startswith(("127.", "localhost")):
-                        raise GrokBotError(ErrorKind.SERVER, f"网关地址不在预期域名内：{host}")
+                        raise GrokBotError("网关地址不在预期域名内：{host}", ErrorKind.SERVER, host=host)
                     self.conn = body
                     took = time.monotonic() - t0
                     woke = waited or took >= WAKE_SLOW
@@ -408,7 +416,8 @@ class GrokBotClient:
                                       f"{'，像是刚叫醒，用之前先确认网关能响应' if woke else ''}）")
                     return body
                 if time.monotonic() > deadline:
-                    raise GrokBotError(ErrorKind.TIMEOUT, f"云端电脑 {WAKE_TIMEOUT} 秒内没醒（runState={body.get('runState')}）")
+                    raise GrokBotError("云端电脑 {seconds} 秒内没醒（runState={state}）", ErrorKind.TIMEOUT,
+                                       seconds=WAKE_TIMEOUT, state=body.get("runState"))
                 self._log("info", f"云端电脑还没就绪（runState={body.get('runState')}），{WAKE_POLL} 秒后重试")
                 waited = True
                 await _sleep(WAKE_POLL)
@@ -428,8 +437,8 @@ class GrokBotClient:
                 await self.call("listAgents", retry=False, timeout=WAKE_PROBE_TIMEOUT)
             except GrokBotError as e:
                 if e.kind == ErrorKind.AUTH or time.monotonic() + WAKE_PROBE_PAUSE >= deadline:
-                    raise GrokBotError(e.kind, f"云端电脑刚叫醒，网关试了 {tries} 次（{time.monotonic() - t0:.1f}s）"
-                                               f"都没响应：{e.detail[:160]}")
+                    raise GrokBotError("云端电脑刚叫醒，网关试了 {tries} 次（{seconds}s）都没响应：{error}", e.kind,
+                                       tries=tries, seconds=f"{time.monotonic() - t0:.1f}", error=e.payload())
                 self._log("info", f"云端电脑刚叫醒，网关还没响应（第 {tries} 次：{e.detail[:80]}），"
                                   f"{WAKE_PROBE_PAUSE} 秒后再试")
                 await _sleep(WAKE_PROBE_PAUSE)
@@ -470,7 +479,8 @@ class GrokBotClient:
             await self.ensure_box(wake=True)
             return await self.call(method, args, retry=False, timeout=timeout)
         if not 200 <= status < 300:
-            raise GrokBotError(ErrorKind.SERVER, f"{method} HTTP {status} {str(body)[:200]}")
+            raise GrokBotError("{method} HTTP {status} {body}", ErrorKind.SERVER, method=method, status=status,
+                               body=str(body)[:200])
         self.woke_at = None  # 网关响应了：刚叫醒的也不用再确认
         return body
 
@@ -509,7 +519,7 @@ class GrokBotClient:
             entries = res.get("entries") if isinstance(res, dict) else res
             if isinstance(entries, list):
                 return [e for e in entries if isinstance(e, dict)][-limit:]
-        raise last or GrokBotError(ErrorKind.SERVER, "读不到对话记录")
+        raise last or GrokBotError("读不到对话记录", ErrorKind.SERVER)
 
     async def read_events(self, on_event: Callable[[str, dict], None], on_connected: Callable[[], None] = None) -> None:
         """读一条事件流直到它断开（正常约 57 秒一次）。每帧调用 on_event(channel, payload)。"""
@@ -523,9 +533,9 @@ class GrokBotClient:
                                           read_bufsize=4 * 1024 * 1024) as res:
                 if res.status in (401, 403, 417):
                     self.conn = None
-                    raise GrokBotError(ErrorKind.SERVER, f"/events HTTP {res.status}")
+                    raise GrokBotError("/events HTTP {status}", ErrorKind.SERVER, status=res.status)
                 if res.status != 200:
-                    raise GrokBotError(ErrorKind.SERVER, f"/events HTTP {res.status}")
+                    raise GrokBotError("/events HTTP {status}", ErrorKind.SERVER, status=res.status)
                 if on_connected:
                     on_connected()
                 data = []
@@ -545,7 +555,7 @@ class GrokBotClient:
                     # 以 ":" 开头的是心跳注释（:ping），retry: 是重连提示，都不用管
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.conn = None  # 连不上或一直没字节：下次连之前重新要网关地址（云端电脑可能换了机器）
-            raise GrokBotError(ErrorKind.SERVER, f"/events {e!r}")
+            raise GrokBotError("/events {error}", ErrorKind.SERVER, error=repr(e))
 
 
 # ---------- 事件流中枢：一个账号只保持一条事件流 ----------

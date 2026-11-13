@@ -40,6 +40,7 @@ class GrokBotAdmin:
         self._bots: Optional[List[dict]] = None
         self._bots_at = 0.0
         self._bots_error = ""
+        self._bots_error_msg = None
 
     def _log(self, level: str, msg: str) -> None:
         if self.logger:
@@ -70,6 +71,7 @@ class GrokBotAdmin:
             "bots": self._bots,
             "bots_at": self._bots_at,
             "bots_error": self._bots_error,
+            "bots_error_msg": self._bots_error_msg,
         }
 
     # ---------- 登录 ----------
@@ -104,7 +106,7 @@ class GrokBotAdmin:
                 self._result = {"ok": False, "note": "已取消", "at": time.time()}
             raise
         except GrokBotError as e:
-            m = msg("登录失败：{error}", error=e.detail)
+            m = msg("登录失败：{error}", error=e.payload())
             self._result = {"ok": False, "note": render(m), "note_msg": m, "at": time.time()}
             self._log("warning", f"Grok Bot 登录失败：{e.detail}")
         except Exception as e:  # noqa: BLE001 —— 后台任务，出错要让页面看得到
@@ -127,7 +129,7 @@ class GrokBotAdmin:
         self.creds.clear()
         if self._client is not None:
             self._client.conn = None
-        self._bots, self._bots_at, self._bots_error = None, 0.0, ""
+        self._bots, self._bots_at, self._bots_error, self._bots_error_msg = None, 0.0, "", None
         self._log("info", "已退出 Grok Bot 登录（删除本机凭证）")
 
     # ---------- Bot 列表 ----------
@@ -137,11 +139,11 @@ class GrokBotAdmin:
         try:
             agents = await self.client().list_agents()
         except GrokBotError as e:
-            self._bots_error = e.detail
+            self._bots_error, self._bots_error_msg = e.detail, e.payload()
             raise
         self._bots = [summarize_agent(a) for a in agents if a.get("id") and not a.get("isGroup")]
         self._bots_at = time.time()
-        self._bots_error = ""
+        self._bots_error, self._bots_error_msg = "", None
         return self._bots
 
     async def close(self) -> None:
