@@ -793,11 +793,11 @@ class AdminHandler:
                 continue
             try:
                 ok = await self._blocking(llm_router.switch, conn, name, remember=False)
-                error = "" if ok is not False else "模型没有配置好"
+                error = "" if ok is not False else label("模型没有配置好")
             except Exception as e:
                 ok, error = False, str(e).strip() or type(e).__name__
             if ok is False:
-                self.logger.bind(tag=TAG).error(f"在线连接 {item['session_id']} 切换模型 {name} 失败: {error}")
+                self.logger.bind(tag=TAG).error(f"在线连接 {item['session_id']} 切换模型 {name} 失败: {render(error)}")
                 if before:   # 恢复成原来记住的
                     await self._blocking(llm_router.store().put, device,
                                          {k: v for k, v in before.items() if k != "last_active"})

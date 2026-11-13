@@ -770,7 +770,8 @@ window.UI_ZH_HANT = {
   "配置里的 {entry} 不是豆包流式识别，请在配置文件里改名或删掉它": "配置裡的 {entry} 不是豆包流式識別，請在配置檔案裡改名或刪掉它",
   "鉴权失败（{status}）：Key 不对，或者没有开通这个资源。{body}": "鑑權失敗（{status}）：Key 不對，或者沒有開通這個資源。{body}",
   "；{d}没开口就提示一次进度": "；{d}沒開口就提示一次進度",
-  "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制台</a>开通“豆包流式语音识别模型 2.0”后，把密钥填在这里。": "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制檯</a>開通“豆包流式語音識別模型 2.0”後，把金鑰填在這裡。"
+  "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制台</a>开通“豆包流式语音识别模型 2.0”后，把密钥填在这里。": "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制檯</a>開通“豆包流式語音識別模型 2.0”後，把金鑰填在這裡。",
+  "模型没有配置好": "模型沒有配置好"
 };
 window.UI_ZH_HANS = {
   "<button class=\"btn\" id=\"tts-edge\">切回免費 EdgeTTS</button>": "<button class=\"btn\" id=\"tts-edge\">切回免费 EdgeTTS</button>",
