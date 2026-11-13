@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from ruamel.yaml.comments import CommentedMap
 
 from core.admin import config_store
+from core.admin.i18n_msg import UIError
 from core.agent import reply_language
 
 SPEECH = {
@@ -40,7 +41,7 @@ def describe(section, merged):
     key = entry.get('api_key')
     result = {'entry': spec['entry'], 'base_url': endpoint.removesuffix(spec['endpoint']),
               'model': entry.get(spec['model_field']) or spec['model'],
-              'key_set': not config_store.is_placeholder(key), 'key_hint': config_store.mask_key(key),
+              'key_set': not config_store.is_placeholder(key), **config_store.masked_fields('key_hint', key),
               'conflict': bool(entry) and entry.get('type') != 'openai'}
     result['api_protocol'] = entry.get('api_protocol') or 'openai'
     result['configured'] = result['key_set'] and not result['conflict']
@@ -57,24 +58,24 @@ def save(section, payload, merged, path=None):
     spec = SPEECH[section]
     old = (merged.get(section) or {}).get(spec['entry']) or {}
     if old and old.get('type') != 'openai':
-        raise ValueError(f"{spec['entry']} 已存在，但不是 OpenAI 相容類型")
+        raise UIError("{entry} 已存在，但不是 OpenAI 兼容类型", entry=spec['entry'])
     defaults = describe(section, merged)
     protocol = payload.get('api_protocol', defaults['api_protocol'])
     if protocol not in ('openai', 'zenmux'):
-        raise ValueError('請選擇 OpenAI 或 ZenMux 語音協定')
+        raise UIError("请选择 OpenAI 或 ZenMux 语音协议")
     base = str(payload.get('base_url', defaults['base_url'])).strip().rstrip('/')
     url = urlsplit(base)
     if (url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password
             or url.query or url.fragment or any(c.isspace() for c in base)):
-        raise ValueError('Base URL 必須是完整的 HTTP(S) 網址，不可含帳密、查詢參數或空白')
+        raise UIError("Base URL 必须是完整的 HTTP(S) 网址，不能含账号密码、查询参数或空格")
     model = str(payload.get('model', defaults['model'])).strip()
     if not model or len(model) > 200:
-        raise ValueError('請填寫模型名稱（最多 200 字元）')
+        raise UIError("请填写模型名称（最多 200 个字符）")
     key = str(payload.get('api_key') or '').strip()
     if any(c.isspace() for c in key):
-        raise ValueError('API Key 不可含空白或換行')
+        raise UIError("API Key 不能含空格或换行")
     if not key and config_store.is_placeholder(old.get('api_key')):
-        raise ValueError('請填寫 API Key')
+        raise UIError("请填写 API Key")
     values = {'type': 'openai', 'api_protocol': protocol,
               spec['url_field']: base + spec['endpoint'], spec['model_field']: model}
     if key:
@@ -84,26 +85,26 @@ def save(section, payload, merged, path=None):
     if section == 'ASR':
         language = str(payload.get('language', defaults['language'])).strip()
         if language and not re.fullmatch(r'[a-z]{2,3}', language):
-            raise ValueError('辨識語言請使用 ISO 639 代碼，例如 zh 或 en；留空則自動偵測')
+            raise UIError("识别语言请使用 ISO 639 代码，例如 zh 或 en；留空则自动检测")
         prompt = str(payload.get('prompt', defaults['prompt'])).strip()
         if len(prompt) > 4000:
-            raise ValueError('轉寫提示最多 4000 字元')
+            raise UIError("转写提示最多 4000 个字符")
         values.update(language=language, prompt=prompt)
     else:
         voice = str(payload.get('voice', defaults['voice'])).strip()
         try:
             speed = float(payload.get('speed', defaults['speed']))
         except (TypeError, ValueError):
-            raise ValueError('語速必須介於 0.25 和 4 之間')
+            raise UIError("语速必须在 0.25 到 4 之间")
         if not voice or len(voice) > 200 or not math.isfinite(speed) or not .25 <= speed <= 4:
-            raise ValueError('請填寫音色，語速必須介於 0.25 和 4 之間')
+            raise UIError("请填写音色，语速必须在 0.25 到 4 之间")
         values.update(voice=voice, speed=speed)
         audio_format = payload.get('format', defaults['format'])
         if audio_format not in ('wav', 'mp3', 'pcm', 'opus', 'aac', 'flac'):
-            raise ValueError('不支援的音訊格式')
+            raise UIError("不支持的音频格式")
         rate = payload.get('pcm_sample_rate', defaults['pcm_sample_rate'])
         if str(rate) not in ('8000', '16000', '22050', '24000', '32000', '44100', '48000'):
-            raise ValueError('請選擇有效的 PCM 取樣率')
+            raise UIError("请选择有效的 PCM 采样率")
         values.update(format=audio_format, pcm_sample_rate=int(rate))
         if old.get('private_voice'):
             values['private_voice'] = ''

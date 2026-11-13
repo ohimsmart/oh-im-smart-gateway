@@ -1,0 +1,8 @@
+Oh I'm Smart gateway (https://github.com/ohimsmart/oh-im-smart-gateway)
+
+This repository starts from the history of xiaozhi-hub-server by 半格 / HalfBit
+(https://github.com/justhalfbit/xiaozhi-hub-server), which in turn builds on
+xiaozhi-esp32-server by xinnan-tech. Both are released under the MIT License;
+the copyright notices are kept in LICENSE.
+
+Changes in this repository are released under the same MIT License.

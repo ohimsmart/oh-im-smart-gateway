@@ -491,7 +491,8 @@ class GrokBotSession(AgentSession):
                                          cfg.send_timeout + cfg.connect_wait)
             self._log("info", f"{tracker._since()} sendPrompt 返回 {json.dumps(res, ensure_ascii=False)[:120]}")
         except asyncio.TimeoutError:
-            failure = GrokBotError(ErrorKind.SERVER, f"sendPrompt {cfg.send_timeout + cfg.connect_wait:g} 秒没返回")
+            failure = GrokBotError("sendPrompt {seconds} 秒没返回", ErrorKind.SERVER,
+                                   seconds=f"{cfg.send_timeout + cfg.connect_wait:g}")
         except GrokBotError as e:
             failure = e
         if failure is not None:

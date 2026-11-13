@@ -13,6 +13,7 @@ from jinja2 import Template
 
 from config.config_loader import get_project_dir
 from core.admin import catalog, connections, pages
+from core.admin.i18n_msg import label, msg
 
 # 变量标记：\x01变量名\x02值\x03，前端换成高亮
 MARK_START, MARK_SEP, MARK_END = "\x01", "\x02", "\x03"
@@ -67,47 +68,52 @@ def _online_conn():
 
 def _system_prompt_of(conn) -> str:
     dialogue = getattr(getattr(conn, "dialogue", None), "dialogue", None) or []
-    for msg in dialogue:
-        if getattr(msg, "role", None) == "system":
-            return str(getattr(msg, "content", "") or "")
+    for m in dialogue:
+        if getattr(m, "role", None) == "system":
+            return str(getattr(m, "content", "") or "")
     return ""
 
 
 # ---------- 流程 ----------
 
-DESIGN_DOC_URL = "https://github.com/justhalfbit/xiaozhi-hub-server/blob/main/hub-docs/design.md"
+DESIGN_DOC_URL = "https://github.com/ohimsmart/oh-im-smart-gateway/blob/main/hub-docs/design.md"
 
-def _voice_name(voice: str) -> str:
+def _raw(value):
+    """配置里的名称（条目名、model_name、type）：页面原样显示，不会碰巧被当成字典的键翻译。"""
+    return msg("{value}", value=value)
+
+
+def _voice_name(voice: str):
     info = next((v for v in catalog.EDGE_VOICES if v["value"] == voice), None)
-    return f"{info['name']}（{info['group']}）" if info else voice
+    return msg("{name}（{group}）", name=label(info["name"]), group=label(info["group"])) if info else voice
 
 
-def _llm_label(name: str, entry: dict) -> str:
+def _llm_label(name: str, entry: dict):
     if entry.get("type") == "claude_cli":
         return "Claude Code"
     vendor = catalog.VENDOR_BY_ENTRY.get(name)
-    return vendor["label"] if vendor else name
+    return label(vendor["label"]) if vendor else _raw(name)
 
 
-def _asr_label(name: str, entry: dict) -> str:
+def _asr_label(name: str, entry: dict):
     if entry.get("type") == "doubao_stream":
-        return "豆包流式识别"
+        return msg("豆包流式识别")
     if entry.get("type") == "sherpa_onnx_local":
         if "x-asr" in str(entry.get("model_dir") or "").lower():
-            return "本地 X-ASR"
+            return msg("本地 X-ASR")
         model_type = entry.get("model_type") or "sense_voice"
-        return "本地 " + pages.SHERPA_MODEL_LABELS.get(model_type, model_type)
-    return name or "未设置"
+        return msg("本地 {model}", model=label(pages.SHERPA_MODEL_LABELS.get(model_type, model_type)))
+    return _raw(name) if name else msg("未设置")
 
 
-def _claude_model_label(model) -> str:
+def _claude_model_label(model):
     option = next((o for o in catalog.CLAUDE_MODELS if o["value"] == model), None)
-    return option["label"] if option else (str(model) if model else "默认模型")
+    return label(option["label"]) if option else (str(model) if model else msg("默认模型"))
 
 
-def _effort_label(effort) -> str:
+def _effort_label(effort):
     option = next((o for o in catalog.CLAUDE_EFFORTS if o["value"] == effort), None)
-    return option["label"] if option else "默认"
+    return label(option["label"]) if option else msg("默认")
 
 
 def describe_stages(merged: dict) -> list:
@@ -120,37 +126,38 @@ def describe_stages(merged: dict) -> list:
     prebuffer = int(merged.get("tts_audio_prebuffer_count") or 5)
 
     if llm.get("type") == "claude_cli":
-        llm_value = f"Claude Code · {_claude_model_label(llm.get('model'))}"
-        llm_hint = f"思考力度：{_effort_label(llm.get('effort'))}"
+        llm_value = msg("Claude Code · {model}", model=_claude_model_label(llm.get("model")))
+        llm_hint = msg("思考力度：{effort}", effort=_effort_label(llm.get("effort")))
     else:
         llm_value = _llm_label(llm_name, llm)
-        llm_hint = str(llm.get("model_name") or "")
+        llm_hint = _raw(str(llm.get("model_name") or ""))
     if tts.get("type") == "edge":
-        tts_value, tts_hint = f"EdgeTTS · {_voice_name(str(tts.get('voice') or ''))}", "微软在线语音，需要联网"
+        tts_value = msg("EdgeTTS · {voice}", voice=_voice_name(str(tts.get("voice") or "")))
+        tts_hint = "微软在线语音，需要联网"
     else:
-        tts_value, tts_hint = tts_name or "未设置", str(tts.get("type") or "")
+        tts_value, tts_hint = _raw(tts_name) if tts_name else msg("未设置"), _raw(str(tts.get("type") or ""))
     local_asr = asr.get("type") == "sherpa_onnx_local"
     return [
-        {"id": "listen", "icon": "🎙", "title": "收音", "value": f"停顿 {silence}ms 算说完",
+        {"id": "listen", "icon": "🎙", "title": "收音", "value": msg("停顿 {ms}ms 算说完", ms=silence),
          "hint": "说话中间停顿太久会被截成两句", "page": "asr"},
         {"id": "asr", "icon": "📝", "title": "识别", "value": _asr_label(asr_name, asr),
          "hint": "在本机识别，不联网" if local_asr else "云端识别，需要联网", "page": "asr"},
         {"id": "llm", "icon": "✦", "title": "大模型", "value": llm_value, "hint": llm_hint, "page": "llm"},
         {"id": "tts", "icon": "🔊", "title": "合成", "value": tts_value, "hint": tts_hint, "page": "tts"},
-        {"id": "play", "icon": "📢", "title": "播放", "value": f"缓冲约 {prebuffer * 60 / 1000:.1f} 秒",
+        {"id": "play", "icon": "📢", "title": "播放", "value": msg("缓冲约 {s} 秒", s=f"{prebuffer * 60 / 1000:.1f}"),
          "hint": "说话断续时，在配置文件里调大", "page": None},
     ]
 
 
-def _duration(seconds) -> str:
+def _duration(seconds):
     try:
         seconds = float(seconds)
     except (TypeError, ValueError):
         return str(seconds)
     if seconds >= 60 and seconds % 60 == 0:
         minutes = int(seconds // 60)
-        return f"{minutes // 60} 小时" if minutes % 60 == 0 else f"{minutes} 分钟"
-    return f"{int(seconds)} 秒"
+        return msg("{n} 小时", n=minutes // 60) if minutes % 60 == 0 else msg("{n} 分钟", n=minutes)
+    return msg("{n} 秒", n=int(seconds))
 
 
 def _setting(entry: dict, key: str, default: float) -> float:
@@ -160,8 +167,26 @@ def _setting(entry: dict, key: str, default: float) -> float:
     return _num(entry, key, default)
 
 
-def _quoted(words, sep: str = "") -> str:
-    return sep.join(f"“{w}”" for w in words)
+def _quoted(words):
+    """“甲”“乙”：全是用户填的词，没有要翻译的字。"""
+    return "".join(f"“{w}”" for w in words)
+
+
+def _either(words):
+    """接上次对话的关键词，最多两个：“甲”或“乙”。"""
+    words = [str(w) for w in words[:2]]
+    return msg("“{a}”或“{b}”", a=words[0], b=words[1]) if len(words) == 2 else _quoted(words)
+
+
+def _join(items, sep):
+    """把多项接起来：分隔符是我们的标点，交给 msg 翻译；每项原样（字符串）或可翻译（msg 物件）。
+
+    对半折叠，嵌套深度是 log n：称呼没有数量上限，逐项折叠会让 JSON 和页面递归太深。
+    """
+    if len(items) <= 1:
+        return items[0] if items else ""
+    a, b = _join(items[:len(items) // 2], sep), _join(items[len(items) // 2:], sep)
+    return msg("{a}；{b}", a=a, b=b) if sep == "；" else msg("{a}、{b}", a=a, b=b)
 
 
 def describe_tips(merged: dict) -> list:
@@ -174,31 +199,49 @@ def describe_tips(merged: dict) -> list:
     cli = next((llms[n] for n in names if isinstance(llms.get(n), dict) and llms[n].get("type") == "claude_cli"), None)
     has_api = any(isinstance(llms.get(n), dict) and llms[n].get("type") != "claude_cli" for n in names)
 
-    tips = [{"title": "唤醒", "say": "说唤醒词（StackChan 是“Hi, StackChan”），或按一下按键、点一下屏幕",
-             "result": "设备开始听你说话。交给这台设备上次用的模型，第一次用时是 "
-                       f"{_llm_label(default_name, llms.get(default_name) or {})}"}]
+    # 引号里设备认的口令（唤醒词、停下、继续、退出词、接续关键词、应答语）都是普通字符串参数，原样显示；
+    # “嗨”留在范本里：呼名也认 hi/hey（core/agent/call_names.py），英文页面可以译成 Hi
+    tips = [{"title": "唤醒", "say": msg("说唤醒词（StackChan 是“{wake}”），或按一下按键、点一下屏幕", wake="Hi, StackChan"),
+             "result": msg("设备开始听你说话。交给这台设备上次用的模型，第一次用时是 {model}",
+                           model=_llm_label(default_name, llms.get(default_name) or {}))}]
     if calls["enabled"]:
-        aliases = "；".join(f"{m['label']}：{'、'.join(m['aliases'])}" for m in calls["models"])
-        tips.append({"title": "换模型", "say": "句首说“嗨 + 称呼”，后面可以直接接内容",
-                     "result": f"换成对应的模型回答，之后一直用它；只说称呼时回一声“{calls['reply']}”。"
-                               + (f"现在的称呼 —— {aliases}" if aliases else "还没有配置称呼")})
+        # describe_call_names 找不到对应的模型时，标签就是条目名本身（配置里的值），原样显示
+        aliases = _join([msg("{label}：{aliases}", label=m.get("label_msg") or (
+                             _raw(m["label"]) if m["label"] == m["entry"] else label(m["label"])),
+                             aliases=_join(list(m["aliases"]), "、")) for m in calls["models"]], "；")
+        if aliases:
+            result = msg("换成对应的模型回答，之后一直用它；只说称呼时回一声“{reply}”。现在的称呼 —— {aliases}",
+                         reply=calls["reply"], aliases=aliases)
+        else:
+            result = msg("换成对应的模型回答，之后一直用它；只说称呼时回一声“{reply}”。还没有配置称呼", reply=calls["reply"])
+        tips.append({"title": "换模型", "say": "句首说“嗨 + 称呼”，后面可以直接接内容", "result": result})
     tips.append({"title": "打断", "say": "设备说话时按一下按键（StackChan 是点一下屏幕上的脸），或者喊唤醒词",
                  "result": "马上停下，然后可以说下一句。设备说话时不收音，不能直接插话"})
     if cli:
         progress = _setting(cli, "progress_interval_seconds", 30)
         turn = _setting(cli, "turn_timeout_seconds", 600)
+        if not turn:
+            wait = msg("设备陪着等，不限时长")
+        else:
+            wait = msg("设备陪着等，最长 {d}", d=_duration(turn))
+        nudge = msg("；{d}没开口就提示一次进度", d=_duration(progress)) if progress else ""
+        # 停下、继续是设备认的口令（core/agent/voice_commands.py 只认中文），作为普通字符串参数原样显示
+        if _setting(cli, "background_max_seconds", 7200):
+            after = msg("。中途打断、结束或等满了，Claude 不停，后台接着做，做完了告诉你；想让它停下就说“{cmd}”", cmd="停下")
+        else:
+            after = msg("。被停下或打断后，说“{cmd}”接着做", cmd="继续")
         tips.append({"title": "长任务", "say": "让 Claude 做要几分钟的事",
-                     "result": ("设备陪着等，不限时长" if not turn else f"设备陪着等，最长 {_duration(turn)}")
-                               + (f"；{_duration(progress)}没开口就提示一次进度" if progress else "")
-                               + ("。中途打断、结束或等满了，Claude 不停，后台接着做，做完了告诉你；想让它停下就说“停下”"
-                                  if _setting(cli, "background_max_seconds", 7200) else "。被停下或打断后，说“继续”接着做")})
+                     "result": msg("{wait}{nudge}{after}", wait=wait, nudge=nudge, after=after)})
         window = _setting(cli, "resume_window_minutes", 120)
         keywords = cli.get("resume_keywords") or ["接着上次聊"]
-        said = _quoted(keywords[:2], "或")
-        result = (f"{_duration(window * 60)}内再唤醒，Claude 自动接上上次的对话；隔得更久的，说{said}也能接上"
-                  if window else f"说{said}接上上次的对话")
+        said = _either(keywords)
+        if window:
+            result = msg("{d}内再唤醒，Claude 自动接上上次的对话；隔得更久的，说{said}也能接上",
+                         d=_duration(window * 60), said=said)
+        else:
+            result = msg("说{said}接上上次的对话", said=said)
         if has_api:
-            result += "。API 模型断开后就不记得了"
+            result = msg("{text}。API 模型断开后就不记得了", text=result)
         tips.append({"title": "接着上次聊", "say": "过一会儿再唤醒设备", "result": result})
     elif has_api:
         tips.append({"title": "接着上次聊", "say": "过一会儿再唤醒设备",
@@ -207,14 +250,18 @@ def describe_tips(merged: dict) -> list:
     first = int(merged.get("close_connection_no_voice_time", 120) or 120)
     end_prompt = merged.get("end_prompt") or {}
     if end_prompt.get("enable", True) is False:
-        farewell = "直接断开"
+        farewell = msg("直接断开")
     elif end_prompt.get("reply"):
-        farewell = f"说一句“{end_prompt['reply']}”后断开"
+        farewell = msg("说一句“{reply}”后断开", reply=end_prompt["reply"])
     else:
-        farewell = "说一句告别语后断开"
+        farewell = msg("说一句告别语后断开")
     exits = merged.get("exit_commands") or []
-    tips.append({"title": "结束", "say": f"说{_quoted(exits)}" if exits else "不再说话",
-                 "result": ("立即断开。" if exits else "") + f"{_duration(first)}没人说话时，{farewell}"})
+    if exits:
+        result = msg("立即断开。{d}没人说话时，{farewell}", d=_duration(first), farewell=farewell)
+    else:
+        result = msg("{d}没人说话时，{farewell}", d=_duration(first), farewell=farewell)
+    tips.append({"title": "结束", "say": msg("说{words}", words=_quoted(exits)) if exits else "不再说话",
+                 "result": result})
     return tips
 
 
@@ -284,9 +331,10 @@ def describe_prompt(merged: dict) -> dict:
         "id": "base", "title": "基础模板（含人设）", "source": "服务端", "when":
             "设备连接时生成；Claude 进程启动时固定" if is_cli else "设备连接时生成；当前时间每轮更新",
         "text": base, "collapsed": False,
-        "note": f"来自 {_template_name(merged)}。高亮的部分是填进去的值：人设来自配置里的 prompt，"
-                "日期、农历在设备连接时生成，当前时间" +
-                ("在 Claude 进程启动时取一次。" if is_cli else "每轮发送前更新。"),
+        "note": msg("来自 {template}。高亮的部分是填进去的值：人设来自配置里的 prompt，日期、农历在设备连接时生成，"
+                    "当前时间在 Claude 进程启动时取一次。", template=_template_name(merged)) if is_cli else
+                msg("来自 {template}。高亮的部分是填进去的值：人设来自配置里的 prompt，日期、农历在设备连接时生成，"
+                    "当前时间每轮发送前更新。", template=_template_name(merged)),
     })
     if is_cli:
         from core.providers.llm.claude_cli.claude_cli import VOICE_RULES
@@ -328,8 +376,8 @@ def describe_prompt(merged: dict) -> dict:
     if is_cli:
         idle = _setting(llm, "idle_timeout_seconds", 300)
         if idle:  # 填 0 时每轮结束就关进程，下一轮重新传入，日期时间总是新的
-            warnings.append(f"提示词在 Claude Code 进程启动时一次性传入，进程存活期间（空闲 {_duration(idle)}才关闭）"
-                            "里面的日期、时间不会更新。")
+            warnings.append(msg("提示词在 Claude Code 进程启动时一次性传入，进程存活期间（空闲 {d}才关闭）"
+                                "里面的日期、时间不会更新。", d=_duration(idle)))
 
     actual = _system_prompt_of(conn) if conn is not None else ""
     return {

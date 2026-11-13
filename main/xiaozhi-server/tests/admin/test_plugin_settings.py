@@ -139,3 +139,24 @@ async def test_http_test_uses_unsaved_values_and_hides_key(client, monkeypatch):
     assert seen[-1]["city"] == "上海"  # 测试用页面上还没保存的值
     body = await (await client.post("/admin/api/plugin-settings/demo/test", json={"api_key": "sk-good-0002"})).json()
     assert body == {"ok": True, "count": 2, "echo": "key=***"}
+
+
+async def test_http_test_hides_key_in_keyed_messages(client, monkeypatch):
+    """带 key 的错误和成功消息：填好的句子和 msg_params（包括嵌套的）里都不带出 Key。"""
+    from core.admin.i18n_msg import UIError, label, msg
+
+    async def fake_test(values):
+        key = values["api_key"]
+        if key == "sk-bad-key-9999":
+            raise UIError("{field} 不对：{detail}", field=label("API Key"), detail=f"your key {key} is invalid")
+        return {"message": f"ok {key}", "message_msg": msg("用了 {what}", what=msg("{value}", value=key))}
+    monkeypatch.setitem(plugin_settings.TESTS, "demo", fake_test)
+
+    r = await client.post("/admin/api/plugin-settings/demo/test", json={"api_key": "sk-bad-key-9999"})
+    body = await r.json()
+    assert r.status == 400 and body["msg_key"] == "{field} 不对：{detail}"
+    assert "sk-bad-key-9999" not in json.dumps(body) and body["msg_params"]["detail"] == "your key *** is invalid"
+    assert body["msg_params"]["field"] == {"msg_key": "API Key", "msg_params": {}}
+    body = await (await client.post("/admin/api/plugin-settings/demo/test", json={"api_key": "sk-good-0003"})).json()
+    assert "sk-good-0003" not in json.dumps(body) and body["message"] == "ok ***"
+    assert body["message_msg"]["msg_params"]["what"]["msg_params"]["value"] == "***"

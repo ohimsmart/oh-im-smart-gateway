@@ -32,13 +32,13 @@ xiaozhi-hub-server 是小智设备（M5Stack StackChan、ESP32 开发板等）�
 **一键安装**：在终端运行下面这一行。代码会下载到 `~/xiaozhi-hub-server`，然后自动安装；安装结束时会询问是否开机自启，直接回车就是开启（见 [§7](#7-开机自启更新与卸载)）。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main/scripts/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ohimsmart/oh-im-smart-gateway/main/scripts/bootstrap.sh | bash
 ```
 
 **手动安装**：
 
 ```bash
-git clone --depth 1 https://github.com/justhalfbit/xiaozhi-hub-server.git
+git clone --depth 1 https://github.com/ohimsmart/oh-im-smart-gateway.git xiaozhi-hub-server
 cd xiaozhi-hub-server
 bash scripts/install.sh   # 安装
 bash scripts/start.sh     # 启动（没有开启开机自启时）
@@ -55,7 +55,7 @@ bash scripts/start.sh     # 启动（没有开启开机自启时）
 在 PowerShell 里运行：
 
 ```powershell
-git clone --depth 1 https://github.com/justhalfbit/xiaozhi-hub-server.git
+git clone --depth 1 https://github.com/ohimsmart/oh-im-smart-gateway.git xiaozhi-hub-server
 cd xiaozhi-hub-server
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1   # 安装
 powershell -ExecutionPolicy Bypass -File scripts\start.ps1     # 启动
@@ -315,7 +315,7 @@ Windows：先运行 `cd ~` 离开项目目录（Windows 删不掉正在使用的
 一键安装时，环境变量要写在 `bash` 前面，例如：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/justhalfbit/xiaozhi-hub-server/main/scripts/bootstrap.sh | HF_ENDPOINT=https://hf-mirror.com bash
+curl -fsSL https://raw.githubusercontent.com/ohimsmart/oh-im-smart-gateway/main/scripts/bootstrap.sh | HF_ENDPOINT=https://hf-mirror.com bash
 ```
 
 ## 安全提示

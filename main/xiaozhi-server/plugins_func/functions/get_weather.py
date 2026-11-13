@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 
 import httpx
 from config.logger import setup_logging
+from core.admin.i18n_msg import KeyedError
 from plugins_func.register import register_function, ToolType, ActionResponse, Action
 from typing import TYPE_CHECKING
 
@@ -71,8 +72,8 @@ BEAUFORT = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118]
 PM25_LEVELS = [(35, "优"), (75, "良"), (115, "轻度污染"), (150, "中度污染"), (250, "重度污染")]
 
 
-class WeatherError(Exception):
-    """查天气失败，message 可以直接告诉用户。"""
+class WeatherError(KeyedError):
+    """查天气失败，str(e) 可以直接告诉用户；key + params 给后台的「测试」翻译。"""
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,7 @@ async def find_place(name: str) -> Place:
     cached = _places.get(name)
     if cached and (cached[1] is not None or time.time() - cached[0] < PLACE_MISS_TTL):
         if cached[1] is None:
-            raise WeatherError(f"没找到「{name}」这个地方")
+            raise WeatherError("没找到「{name}」这个地方", name=name)
         return cached[1]
     place, failed = None, None
     for lookup in (_nominatim, _open_meteo_geo):
@@ -162,7 +163,7 @@ async def find_place(name: str) -> Place:
         raise WeatherError("地名查询服务连不上")
     _places[name] = (time.time(), place)
     if place is None:
-        raise WeatherError(f"没找到「{name}」这个地方")
+        raise WeatherError("没找到「{name}」这个地方", name=name)
     return place
 
 

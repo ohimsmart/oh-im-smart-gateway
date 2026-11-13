@@ -1,0 +1,5 @@
+# <script> 裏刻意保留的中文：查表鍵、解析用戶輸入的正規表示式，都不顯示。
+# 格式：去掉前後空白的原文<TAB>原因
+const SOURCE_PILL = { "服务端": "ok", "Claude Code": "warn" };	以後端 source 原值作查表鍵，不顯示
+out.resume_keywords = (out.resume_keywords || "").split(/[,，]/).map((s) => s.trim()).filter(Boolean);	解析用戶輸入：中英文逗號都當分隔符，不顯示
+if (/[,，]/.test(w)) { toast(UII18n.t("一个词一项，不要用逗号"), true); return; }	檢查用戶輸入有沒有中英文逗號，不顯示
