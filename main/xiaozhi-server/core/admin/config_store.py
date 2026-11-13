@@ -21,6 +21,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from config.config_loader import get_project_dir, merge_configs, read_config
+from core.admin.i18n_msg import KeyedError, UIError, msg
 
 SECTIONS = ("LLM", "ASR", "TTS", "Intent")
 SECRET_FIELD = re.compile(
@@ -110,6 +111,12 @@ def mask_key(value) -> str:
     return f"{value[:4]}…{value[-4:]}"
 
 
+def masked_fields(name: str, value) -> dict:
+    """{name: 遮住的 key}，短 key 时多一个 name_msg，让页面翻译「已设置」。"""
+    hint = mask_key(value)
+    return {name: hint, **({f"{name}_msg": msg("已设置")} if hint == "已设置" else {})}
+
+
 # ---------- 字段描述与类型转换 ----------
 
 def field_kind(name: str, value):
@@ -148,7 +155,7 @@ def _convert(kind, raw, original):
     if kind == "number":
         text = str(raw).strip()
         if text == "":
-            raise ValueError("数字不能为空")
+            raise UIError("数字不能为空")
         return int(text) if isinstance(original, int) and not isinstance(original, bool) and re.fullmatch(r"-?\d+", text) else float(text)
     if kind == "list":
         items = raw if isinstance(raw, list) else re.split(r"[,，\n]", str(raw))
@@ -156,7 +163,7 @@ def _convert(kind, raw, original):
     if kind == "json":
         value = raw if isinstance(raw, dict) else json.loads(str(raw).strip() or "{}")
         if not isinstance(value, dict):
-            raise ValueError("需要 JSON 对象，例如 {\"key\": \"value\"}")
+            raise UIError('需要 JSON 对象，例如 {"key": "value"}')
         return value
     return "" if raw is None else str(raw).strip()
 
@@ -184,7 +191,7 @@ def update_entry(section: str, name: str, payload: dict, merged: dict, path: Pat
         try:
             value = _convert(kind, raw, entry.get(field))
         except (ValueError, TypeError) as e:
-            raise ValueError(f"{field}: {e}")
+            raise UIError("{field}：{error}", field=field, error=e.payload() if isinstance(e, KeyedError) else str(e))
         original = entry.get(field)
         if kind == "list":
             same = [str(v) for v in (original or [])] == list(value)

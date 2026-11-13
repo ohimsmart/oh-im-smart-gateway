@@ -497,8 +497,13 @@ async def check_connection(config: dict, timeout: float = 10) -> dict:
     """[xiaozhi-hub] 管理后台的"测试连接"：建连（鉴权、资源 ID 不对会被拒绝）并发初始化请求，收到正常回应就算通过。
     不发音频：一段静音可能被当成无效音频报错，反而让人以为 Key 不对。
 
-    返回 {"ok": True, "seconds": 用时} 或 {"ok": False, "error": 给用户看的原因}。
+    返回 {"ok": True, "seconds": 用时} 或 {"ok": False, "error": 给用户看的原因, "error_msg": 同一句的 msg 物件}。
     """
+    from core.admin.i18n_msg import msg, render
+
+    def fail(m):
+        return {"ok": False, "error": render(m), "error_msg": m}
+
     provider = ASRProvider({**config, "hotwords": []}, True)
     started = time.time()
 
@@ -513,15 +518,16 @@ async def check_connection(config: dict, timeout: float = 10) -> dict:
             await ws.send(packet(provider.generate_header(), request))
             result = provider.parse_response(await asyncio.wait_for(ws.recv(), timeout))
             if "code" in result and result["code"] != 1000:
-                return {"ok": False, "error": f"识别服务返回错误 {result['code']}：{str(result.get('payload_msg'))[:200]}"}
+                return fail(msg("识别服务返回错误 {code}：{detail}", code=result["code"],
+                                detail=str(result.get("payload_msg"))[:200]))
     except websockets.InvalidStatus as e:
         status = e.response.status_code
         body = (e.response.body or b"").decode("utf-8", "replace")[:200]
         if status in (401, 403):
-            return {"ok": False, "error": f"鉴权失败（{status}）：Key 不对，或者没有开通这个资源。{body}".strip()}
-        return {"ok": False, "error": f"识别服务拒绝连接（{status}）：{body}".strip()}
+            return fail(msg("鉴权失败（{status}）：Key 不对，或者没有开通这个资源。{body}", status=status, body=body.strip()))
+        return fail(msg("识别服务拒绝连接（{status}）：{body}", status=status, body=body.strip()))
     except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as e:
-        return {"ok": False, "error": f"连不上豆包识别服务，请检查网络：{type(e).__name__} {str(e)[:120]}".strip()}
+        return fail(msg("连不上豆包识别服务，请检查网络：{detail}", detail=f"{type(e).__name__} {str(e)[:120]}".strip()))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
     return {"ok": True, "seconds": round(time.time() - started, 1)}

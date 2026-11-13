@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 import httpx
 from config.logger import setup_logging
+from core.admin.i18n_msg import KeyedError
 from core.providers.tts.dto.dto import ContentType
 from plugins_func.register import (
     register_function,
@@ -75,13 +76,14 @@ _SEARCH_SYSTEM = (
 CONFIG, TEMPORARY = "config", "temporary"
 
 
-class SearchError(Exception):
-    """搜索失败。message 是详细原因（后台测试按钮直接显示）；spoken 是设备上能说给用户听的简短原因。"""
+class SearchError(KeyedError):
+    """搜索失败。key + params 是详细原因（后台测试按钮翻译后显示，str(e) 是填好的简中句子）；
+    spoken 是设备上能说给用户听的简短原因。"""
 
-    def __init__(self, message: str, kind: str = TEMPORARY, spoken: str = ""):
-        super().__init__(message)
+    def __init__(self, key: str, kind: str = TEMPORARY, spoken: str = "", **params):
+        super().__init__(key, **params)
         self.kind = kind
-        self.spoken = spoken or message
+        self.spoken = spoken or str(self)   # 跟原本的 `spoken or message` 相同
 
 
 def today_text() -> str:
@@ -136,23 +138,24 @@ def _api_error(response: httpx.Response, api_key: str = "") -> SearchError:
     if api_key:
         message = message.replace(api_key, "***")
     status = response.status_code
-    detail = f"{status}{'：' + message if message else ''}"
+    detail = f"{status}{': ' + message if message else ''}"   # 第三方原文的参数，英文页面原样显示
     low = message.lower()
     if status == 402 or "insufficient balance" in low or "余额" in message or "credit balance" in low:
-        return SearchError(f"账户余额不足（{detail}）", CONFIG, "联网搜索的账户余额不足，需要去充值")
+        return SearchError("账户余额不足（{detail}）", CONFIG, "联网搜索的账户余额不足，需要去充值", detail=detail)
     if status in (401, 403):
-        return SearchError(f"API Key 不对或没有权限（{detail}）", CONFIG, "联网搜索的 API Key 不对")
+        return SearchError("API Key 不对或没有权限（{detail}）", CONFIG, "联网搜索的 API Key 不对", detail=detail)
     if status == 404:
-        return SearchError(f"接口地址不对，或者不是 Anthropic 协议的接口（{detail}）", CONFIG,
-                           "联网搜索的接口地址不对")
+        return SearchError("接口地址不对，或者不是 Anthropic 协议的接口（{detail}）", CONFIG,
+                           "联网搜索的接口地址不对", detail=detail)
     if status == 429:
-        return SearchError(f"请求太频繁，稍后再试（{detail}）", TEMPORARY)
+        return SearchError("请求太频繁，稍后再试（{detail}）", TEMPORARY, detail=detail)
     if data is None:
-        return SearchError(f"接口返回的不是 Anthropic 协议的格式（HTTP {status}）",
-                           TEMPORARY if status >= 500 else CONFIG, "联网搜索的接口地址不对")
+        return SearchError("接口返回的不是 Anthropic 协议的格式（HTTP {status}）",
+                           TEMPORARY if status >= 500 else CONFIG, "联网搜索的接口地址不对", status=status)
     if status in (400, 422) and ("web_search" in low or "tool" in low or "server" in low):
-        return SearchError(f"这个接口或模型不支持自带搜索（{detail}）", CONFIG, "联网搜索设置的接口或模型不支持搜索")
-    return SearchError(f"接口返回错误（{detail}）", TEMPORARY)
+        return SearchError("这个接口或模型不支持自带搜索（{detail}）", CONFIG, "联网搜索设置的接口或模型不支持搜索",
+                           detail=detail)
+    return SearchError("接口返回错误（{detail}）", TEMPORARY, detail=detail)
 
 
 def _citation_snippets(blocks: list) -> dict:
@@ -216,7 +219,7 @@ def _parse(data) -> SearchResult:
         raise SearchError("接口没有执行搜索，这个接口或模型可能不支持自带搜索", CONFIG,
                           "联网搜索设置的接口或模型不支持搜索")
     if not result.results and errors:
-        raise SearchError(f"搜索没有成功（{', '.join(errors)}）")
+        raise SearchError("搜索没有成功（{errors}）", errors=", ".join(errors))
     return result
 
 
@@ -242,9 +245,9 @@ async def search(settings: dict, query: str) -> SearchResult:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await asyncio.wait_for(client.post(url, json=payload, headers=headers), TOTAL_SECONDS)
     except (httpx.TimeoutException, asyncio.TimeoutError):
-        raise SearchError(f"等了 {time.monotonic() - started:.0f} 秒没有结果，接口太慢或地址不通")
+        raise SearchError("等了 {seconds} 秒没有结果，接口太慢或地址不通", seconds=f"{time.monotonic() - started:.0f}")
     except httpx.HTTPError as e:
-        raise SearchError(f"连不上接口地址（{type(e).__name__}：{e}）")
+        raise SearchError("连不上接口地址（{error}）", error=f"{type(e).__name__}: {e}")
     if response.status_code != 200:
         raise _api_error(response, settings["api_key"])
     try:

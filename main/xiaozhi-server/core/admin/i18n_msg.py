@@ -36,6 +36,10 @@ class KeyedError(Exception):
     def payload(self) -> dict:
         return msg(self.key, **self.params)
 
+    @classmethod
+    def from_msg(cls, m: dict):
+        return cls(m["msg_key"], **(m.get("msg_params") or {}))
+
 
 class UIError(KeyedError, ValueError):
     """顯示給後台用戶的驗證錯誤。是 ValueError 的子類，現有的 except ValueError 照樣接得到。"""

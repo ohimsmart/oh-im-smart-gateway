@@ -10,6 +10,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from core.admin import catalog, config_store, connections, pages
 from core.admin import admin_handler as ah
+from core.admin.i18n_msg import render
 from core.agent import llm_router, reports
 from core.providers.asr import doubao_stream
 
@@ -728,7 +729,7 @@ async def test_vad_save_applies_to_running_instances(cfg_path):
 
 def test_asr_model_check_by_model_type(tmp_path):
     entry = {"type": "sherpa_onnx_local", "model_type": "funasr_nano", "model_dir": str(tmp_path)}
-    assert pages.asr_label(entry) == "本地识别 · Fun-ASR-Nano（sherpa-onnx），不需要联网"
+    assert render(pages.asr_label(entry)) == "本地识别 · Fun-ASR-Nano（sherpa-onnx），不需要联网"
     r = pages.asr_model_check(entry)
     assert r["ok"] is False and "llm.int8.onnx" in r["detail"]
     (tmp_path / "llm.int8.onnx").write_bytes(b"\0" * (101 * 1024 * 1024))
@@ -752,7 +753,7 @@ def test_default_xasr_entry_and_label(tmp_path):
     assert "hotwords" not in entry and pages.hotwords_supported(entry)
     words = pages.describe_hotwords({**cfg, "selected_module": {"ASR": "SherpaXASR"}})["words"]
     assert "Claude Code" in words and "StackChan" in words
-    assert pages.asr_label(entry) == "本地识别 · X-ASR 中英混合（sherpa-onnx），不需要联网"
+    assert render(pages.asr_label(entry)) == "本地识别 · X-ASR 中英混合（sherpa-onnx），不需要联网"
     tmpl = (Path(__file__).resolve().parents[4] / "scripts" / "config.template.yaml").read_text(encoding="utf-8")
     assert "ASR: SherpaXASR" in tmpl
 

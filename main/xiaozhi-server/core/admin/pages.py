@@ -12,6 +12,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from config.config_loader import get_project_dir
 from core.admin import catalog, config_store, plugin_settings, speech_settings
+from core.admin.i18n_msg import UIError, label, msg, render
 from core.agent import asr_text
 
 CLAUDE_CLI_ENTRY = "ClaudeCLI"
@@ -57,7 +58,7 @@ def describe_vendor(vendor: dict, merged: dict) -> dict:
         "models": vendor["models"],
         "hint": vendor.get("hint", ""),
         "key_set": key_set,
-        "key_hint": config_store.mask_key(key),
+        **config_store.masked_fields("key_hint", key),
         # 自定义服务（本机代理、LM Studio）可能不需要 Key
         "configured": exists and bool(base_url and model) and (key_set or vendor["id"] == "custom"),
         "conflict": bool(entry) and entry.get("type") != "openai",
@@ -237,7 +238,7 @@ def save_grok_bots(payload: dict, merged: dict, path: Path = None) -> list:
             if bot_id in wanted:
                 continue
             if old["entry"] == selected:
-                raise ValueError(f"{old['bot_name']} 正在作为默认模型使用，先到“大模型”页换掉再取消")
+                raise UIError("{bot} 正在作为默认模型使用，先到“大模型”页换掉再取消", bot=old["bot_name"])
             llm.pop(old["entry"], None)
             models = (data.get("call_names") or {}).get("models")
             if isinstance(models, dict):
@@ -251,7 +252,7 @@ def _check_positive_number(name: str, raw) -> None:
         if float(str(raw).strip()) <= 0:
             raise ValueError
     except ValueError:
-        raise ValueError(f"{name} 需要是大于 0 的数字")
+        raise UIError("{name} 需要是大于 0 的数字", name=name)
 
 
 def _check_non_negative_number(name: str, raw) -> None:
@@ -259,7 +260,7 @@ def _check_non_negative_number(name: str, raw) -> None:
         if float(str(raw).strip()) < 0:
             raise ValueError
     except ValueError:
-        raise ValueError(f"{name} 需要是 0 或正数")
+        raise UIError("{name} 需要是 0 或正数", name=name)
 
 
 def save_claude_cli(payload: dict, merged: dict, path: Path = None) -> list:
@@ -298,7 +299,7 @@ def save_claude_cli(payload: dict, merged: dict, path: Path = None) -> list:
         items = [str(t).strip() for t in items if str(t).strip()]
         bad = [t for t in items if not TOOL_NAME.match(t)]
         if bad:
-            raise ValueError(f"工具名不对：{', '.join(bad)}")
+            raise UIError("工具名不对：{names}", names=", ".join(bad))
         payload["allowed_tools"] = items
     # 这几项填 0 有特别含义（见 claude_cli.py）：单轮、无响应超时 0 是不限制，空闲关闭 0 是每轮结束就关进程，
     # 自动接续 0 是不自动接续，后台最长 0 是不转后台（打断就停）
@@ -325,7 +326,7 @@ def save_vendor(vendor_id: str, payload: dict, merged: dict, path: Path = None) 
         raise KeyError(vendor_id)
     entry = _entry(merged, "LLM", vendor["entry"])
     if entry and entry.get("type") != "openai":
-        raise ValueError(f"配置里的 {vendor['entry']} 不是 OpenAI 兼容类型，请在配置文件里改名或删掉它")
+        raise UIError("配置里的 {entry} 不是 OpenAI 兼容类型，请在配置文件里改名或删掉它", entry=vendor["entry"])
     payload = payload or {}
     base_url = str(payload.get("base_url") or "").strip()
     model = str(payload.get("model") or "").strip()
@@ -435,22 +436,21 @@ def asr_model_check(asr_entry: dict):
     absent = [f for f in files if _find_model_file(model_dir, f) is None]
     ok = size > 100 * 1024 * 1024 and not absent
     if size and not absent:
-        detail = f"{model.name} {size // (1024 * 1024)}MB"
-    elif absent:
-        detail = f"缺少 {model_dir / absent[0]}"
-    else:
-        detail = f"{model} 文件不完整"
-    return {"ok": ok, "detail": detail}
+        return {"ok": ok, "detail": f"{model.name} {size // (1024 * 1024)}MB"}
+    m = msg("缺少 {path}", path=str(model_dir / absent[0])) if absent else msg("{path} 文件不完整", path=str(model))
+    return {"ok": ok, "detail": render(m), "detail_msg": m}
 
 
-def asr_label(entry: dict) -> str:
+def asr_label(entry: dict) -> dict:
+    """识别方式的标签（msg 物件）：页面翻译它，label 字段放 render() 的结果。"""
     if entry.get("type") != "sherpa_onnx_local":
-        return "云端或其他识别服务"
+        return label("云端或其他识别服务")
     model_type = entry.get("model_type") or "sense_voice"
-    name = SHERPA_MODEL_LABELS.get(model_type, model_type)
+    # 不认识的 model_type 是配置里的原值，原样显示
+    name = label(SHERPA_MODEL_LABELS[model_type]) if model_type in SHERPA_MODEL_LABELS else msg("{value}", value=model_type)
     if "x-asr" in str(entry.get("model_dir") or "").lower():
-        name = "X-ASR 中英混合"
-    return f"本地识别 · {name}（sherpa-onnx），不需要联网"
+        name = label("X-ASR 中英混合")
+    return msg("本地识别 · {name}（sherpa-onnx），不需要联网", name=name)
 
 
 def asr_choice(merged: dict) -> str:
@@ -473,13 +473,16 @@ def describe_asr(merged: dict) -> dict:
     if entry.get("model_type"):
         info.append({"label": "模型类型", "value": str(entry["model_type"])})
     local = _entry(merged, "ASR", catalog.LOCAL_ASR_ENTRY)
+    current, local_label = asr_label(entry), asr_label(local)
     return {
         "selected": name,
-        "label": asr_label(entry),
+        "label": render(current),
+        "label_msg": current,
         "info": info,
         "model": asr_model_check(entry),
         "choice": asr_choice(merged),
-        "local": {"exists": local.get("type") == "sherpa_onnx_local", "label": asr_label(local),
+        "local": {"exists": local.get("type") == "sherpa_onnx_local", "label": render(local_label),
+                  "label_msg": local_label,
                   "model": asr_model_check(local)},
         "doubao": describe_doubao(merged),
         "openai": speech_settings.describe('ASR', merged),
@@ -504,10 +507,10 @@ def describe_doubao(merged: dict) -> dict:
         "entry": catalog.DOUBAO_ASR_ENTRY,
         "auth": "app" if not key_set and appid else "key",
         "key_set": key_set,
-        "key_hint": config_store.mask_key(key),
+        **config_store.masked_fields("key_hint", key),
         "appid": appid,
         "token_set": token_set,
-        "token_hint": config_store.mask_key(token),
+        **config_store.masked_fields("token_hint", token),
         "resource_id": resource,
         "resources": catalog.DOUBAO_RESOURCES,
         "configured": exists and (key_set or bool(appid and token_set)),
@@ -526,10 +529,10 @@ def _doubao_values(payload: dict, entry: dict) -> dict:
     if resource not in catalog.DOUBAO_RESOURCE_VALUES:
         raise ValueError("不支持这个资源 ID")
     values = {"auth": auth, "resource_id": resource}
-    for field, label in (("api_key", "API Key"), ("access_token", "Access Token")):
+    for field, field_label in (("api_key", "API Key"), ("access_token", "Access Token")):
         raw = str(payload.get(field) or "").strip()
         if any(c.isspace() for c in raw):
-            raise ValueError(f"{label} 里不能有空格或换行")
+            raise UIError("{label} 里不能有空格或换行", label=field_label)
         values[field] = raw or _text(entry.get(field))
     values["appid"] = str(payload.get("appid") or "").strip() or _text(entry.get("appid"))
     if auth == "key" and not values["api_key"]:
@@ -546,7 +549,7 @@ def save_doubao(payload: dict, merged: dict, path: Path = None) -> list:
     """保存豆包的鉴权和资源 ID，返回修改的字段。用 APP ID 鉴权时清掉 API Key（有 API Key 时优先用它）。"""
     entry = _entry(merged, "ASR", catalog.DOUBAO_ASR_ENTRY)
     if entry and entry.get("type") != "doubao_stream":
-        raise ValueError(f"配置里的 {catalog.DOUBAO_ASR_ENTRY} 不是豆包流式识别，请在配置文件里改名或删掉它")
+        raise UIError("配置里的 {entry} 不是豆包流式识别，请在配置文件里改名或删掉它", entry=catalog.DOUBAO_ASR_ENTRY)
     values = _doubao_values(payload, entry)
     wanted = {"resource_id": values["resource_id"]}
     if values["auth"] == "key":
@@ -611,11 +614,11 @@ def save_hotwords(words, merged: dict, path: Path = None) -> list:
         if not w:
             continue
         if HOTWORD_BAD.search(w) or len(w) > 40:
-            raise ValueError(f"热词“{w}”不能包含逗号或换行，长度不超过 40 个字")
+            raise UIError("热词“{word}”不能包含逗号或换行，长度不超过 40 个字", word=w)
         if w.lower() not in {x.lower() for x in result}:
             result.append(w)
     if len(result) > HOTWORD_MAX:
-        raise ValueError(f"热词最多 {HOTWORD_MAX} 个；太多会让识别变慢，也更容易误认")
+        raise UIError("热词最多 {n} 个；太多会让识别变慢，也更容易误认", n=HOTWORD_MAX)
     if result == asr_text.hotwords_of(merged) and "asr_hotwords" in merged:
         return []
     with config_store.edit_custom(path) as data:
@@ -644,23 +647,23 @@ def save_corrections(items, merged: dict, path: Path = None) -> list:
         if not target and not aliases:
             continue
         if not target:
-            raise ValueError(f"“{aliases[0]}”要改成什么？请填写正确写法")
+            raise UIError("“{alias}”要改成什么？请填写正确写法", alias=aliases[0])
         if len(target) > 40:
-            raise ValueError(f"正确写法“{target}”太长了，不超过 40 个字")
+            raise UIError("正确写法“{target}”太长了，不超过 40 个字", target=target)
         clean = []
         for a in aliases:
             if len(a) < 2 or len(a) > 40:
-                raise ValueError(f"认错的写法“{a}”需要 2～40 个字；太短容易误改普通的话")
+                raise UIError("认错的写法“{alias}”需要 2～40 个字；太短容易误改普通的话", alias=a)
             if a.lower() == target.lower():
                 continue  # 和正确写法一样，不用替换
             other = owner.get(a.lower())
             if other and other != target:
-                raise ValueError(f"“{a}”同时要改成“{other}”和“{target}”，只能保留一个")
+                raise UIError("“{alias}”同时要改成“{other}”和“{target}”，只能保留一个", alias=a, other=other, target=target)
             owner[a.lower()] = target
             if a.lower() not in {x.lower() for x in clean}:
                 clean.append(a)
         if not clean:
-            raise ValueError(f"“{target}”还没有认错的写法")
+            raise UIError("“{target}”还没有认错的写法", target=target)
         table.setdefault(target, [])
         table[target] += [a for a in clean if a.lower() not in {x.lower() for x in table[target]}]
     if table == {t: list(v) for t, v in asr_text.corrections_of(merged).items()}:
@@ -703,7 +706,7 @@ def save_vad_silence(raw, merged: dict, path: Path = None):
         if not low <= value <= high:
             raise ValueError
     except ValueError:
-        raise ValueError(f"停顿时长需要是 {low}～{high} 之间的整数（毫秒）")
+        raise UIError("停顿时长需要是 {low}～{high} 之间的整数（毫秒）", low=low, high=high)
     if value == entry.get(VAD_SILENCE_FIELD):
         return None
     with config_store.edit_custom(path) as data:
@@ -780,7 +783,7 @@ def save_intent_plugins(functions: list, merged: dict, path: Path = None) -> lis
         raise ValueError("插件列表格式不对")
     unknown = [f for f in functions if f not in catalog.PLUGIN_NAMES]
     if unknown:
-        raise ValueError(f"不认识的插件：{', '.join(map(str, unknown))}")
+        raise UIError("不认识的插件：{names}", names=", ".join(map(str, unknown)))
     name = intent_entry_name(merged, "function_call")
     current = [str(f) for f in _entry(merged, "Intent", name).get("functions") or []]
     wanted = [p["name"] for p in catalog.PLUGINS if p["name"] in functions]
@@ -816,14 +819,17 @@ def call_targets(merged: dict) -> list:
     result = []
     if config_store.entry_type(merged, "LLM", CLAUDE_CLI_ENTRY) == "claude_cli":
         result.append({"entry": CLAUDE_CLI_ENTRY, "label": "Claude（本机 Claude Code）",
+                       "label_msg": label("Claude（本机 Claude Code）"),
                        "defaults": list(call_names.DEFAULT_MODELS[CLAUDE_CLI_ENTRY])})
     for g in grok_entries(merged):
         if g["bot_id"]:
-            result.append({"entry": g["entry"], "label": f"{g['bot_name']}（Grok Bot）",
+            m = msg("{bot}（Grok Bot）", bot=g["bot_name"])
+            result.append({"entry": g["entry"], "label": render(m), "label_msg": m,
                            "defaults": [g["bot_name"].lower()]})
     for vendor in catalog.LLM_VENDORS:
         if describe_vendor(vendor, merged)["configured"]:
-            result.append({"entry": vendor["entry"], "label": f"{vendor['label']}（API）",
+            m = msg("{vendor}（API）", vendor=label(vendor["label"]))
+            result.append({"entry": vendor["entry"], "label": render(m), "label_msg": m,
                            "defaults": [] if vendor["id"] in ("claude", "custom") else [vendor["id"]]})
     return result
 
@@ -840,7 +846,10 @@ def describe_call_names(merged: dict) -> dict:
         if any(m["entry"] == entry for m in models):
             continue
         t = targets.get(entry)
-        models.append({"entry": entry, "label": t["label"] if t else entry, "aliases": call_names._aliases(value),
+        # 没配置好的模型，标签就是条目名（配置里的值），原样显示
+        models.append({"entry": entry, "label": t["label"] if t else entry,
+                       "label_msg": t["label_msg"] if t else msg("{value}", value=entry),
+                       "aliases": call_names._aliases(value),
                        "ready": t is not None})
     return {
         "enabled": bool(cfg.get("enabled", True)),
@@ -852,7 +861,8 @@ def describe_call_names(merged: dict) -> dict:
     }
 
 
-def _clean_aliases(raw, label: str, taken: dict) -> list:
+def _clean_aliases(raw, model_label: dict, taken: dict) -> list:
+    """model_label 是模型标签的 msg 物件；taken 记下每个称呼给了哪个模型（也是 msg 物件）。"""
     from core.agent import call_names
 
     if not isinstance(raw, list):
@@ -863,17 +873,18 @@ def _clean_aliases(raw, label: str, taken: dict) -> list:
         if not alias or alias in aliases:
             continue
         if ALIAS_BAD.search(alias):
-            raise ValueError(f"称呼“{alias}”里不能有空格或标点")
+            raise UIError("称呼“{alias}”里不能有空格或标点", alias=alias)
         if not 2 <= len(alias) <= 20:
-            raise ValueError(f"称呼“{alias}”要在 2 到 20 个字之间")
+            raise UIError("称呼“{alias}”要在 2 到 20 个字之间", alias=alias)
         if alias in call_names._PREFIXES:
-            raise ValueError(f"“{alias}”是开头的招呼语，不能当称呼")
+            raise UIError("“{alias}”是开头的招呼语，不能当称呼", alias=alias)
         if alias in taken:
-            raise ValueError(f"称呼“{alias}”同时给了 {taken[alias]} 和 {label}，只能给一个模型")
-        taken[alias] = label
+            raise UIError("称呼“{alias}”同时给了 {taken} 和 {label}，只能给一个模型",
+                          alias=alias, taken=taken[alias], label=model_label)
+        taken[alias] = model_label
         aliases.append(alias)
     if not aliases:
-        raise ValueError(f"{label} 至少要有一个称呼，不用的话请删掉这个模型")
+        raise UIError("{label} 至少要有一个称呼，不用的话请删掉这个模型", label=model_label)
     return aliases
 
 
@@ -895,17 +906,17 @@ def save_call_names(payload: dict, merged: dict, path: Path = None) -> list:
         raw = [{"entry": m["entry"], "aliases": m["aliases"]} for m in current["models"]]
     if not isinstance(raw, list):
         raise ValueError("模型列表格式不对")
-    known = {m["entry"]: m["label"] for m in current["models"]}
-    known.update({t["entry"]: t["label"] for t in current["targets"]})
+    known_msg = {m["entry"]: m["label_msg"] for m in current["models"]}
+    known_msg.update({t["entry"]: t["label_msg"] for t in current["targets"]})
     allowed = {t["entry"] for t in current["targets"]} | {m["entry"] for m in current["models"]}
     models, taken = {}, {}
     for item in raw:
         entry = str((item or {}).get("entry") or "") if isinstance(item, dict) else ""
         if entry not in allowed:
-            raise ValueError(f"模型“{entry}”还没配置好，请先到“大模型”页填好再来")
+            raise UIError("模型“{entry}”还没配置好，请先到“大模型”页填好再来", entry=entry)
         if entry in models:
-            raise ValueError(f"{known[entry]} 重复了")
-        models[entry] = _clean_aliases(item.get("aliases"), known[entry], taken)
+            raise UIError("{label} 重复了", label=known_msg[entry])
+        models[entry] = _clean_aliases(item.get("aliases"), known_msg[entry], taken)
     if enabled and not models:
         raise ValueError("至少要给一个模型配称呼")
 

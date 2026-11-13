@@ -10,6 +10,7 @@ from pathlib import Path
 from ruamel.yaml.comments import CommentedMap
 
 from core.admin import catalog, config_store
+from core.admin.i18n_msg import KeyedError, UIError, label, msg, render
 
 
 def _spec(settings_id: str) -> dict:
@@ -63,7 +64,7 @@ def describe(merged: dict, settings_id: str) -> dict:
         raw = saved.get(f["key"])
         if f["type"] == "secret":
             item["set"] = bool(_secret_of(saved, f["key"], legacy))
-            item["hint_set"] = config_store.mask_key(raw) if item["set"] else ""
+            item.update(config_store.masked_fields("hint_set", raw) if item["set"] else {"hint_set": ""})
         else:
             item["value"] = "" if raw is None or not _filled(raw) else raw
         fields.append(item)
@@ -87,7 +88,7 @@ def _values(settings_id: str, payload: dict, merged: dict) -> dict:
     legacy = _legacy(saved, settings_id)
     values = {}
     for f in _spec(settings_id)["fields"]:
-        key, label = f["key"], f["label"]
+        key, field_label = f["key"], f["label"]
         if key not in payload:
             if f["type"] == "secret":
                 values[key] = _secret_of(saved, key, legacy)
@@ -98,7 +99,7 @@ def _values(settings_id: str, payload: dict, merged: dict) -> dict:
         text = "" if raw is None else str(raw).strip()
         if f["type"] == "secret":
             if any(c.isspace() for c in text):
-                raise ValueError(f"{label} 里不能有空格或换行")
+                raise UIError("{label} 里不能有空格或换行", label=label(field_label))
             values[key] = text or _secret_of(saved, key, legacy)
         elif f["type"] == "number":
             if text == "":
@@ -107,15 +108,15 @@ def _values(settings_id: str, payload: dict, merged: dict) -> dict:
             try:
                 number = int(text)
             except ValueError:
-                raise ValueError(f"{label} 要填整数")
+                raise UIError("{label} 要填整数", label=label(field_label))
             if ("min" in f and number < f["min"]) or ("max" in f and number > f["max"]):
-                raise ValueError(f"{label} 要在 {f.get('min')} 到 {f.get('max')} 之间")
+                raise UIError("{label} 要在 {min} 到 {max} 之间", label=label(field_label), min=f.get("min"), max=f.get("max"))
             values[key] = number
         else:
             if "\n" in text:
-                raise ValueError(f"{label} 不能换行")
+                raise UIError("{label} 不能换行", label=label(field_label))
             if key.endswith("url") and text and not text.startswith(("http://", "https://")):
-                raise ValueError(f"{label} 要以 http:// 或 https:// 开头")
+                raise UIError("{label} 要以 http:// 或 https:// 开头", label=label(field_label))
             values[key] = text
     return values
 
@@ -158,7 +159,7 @@ async def _test_web_search(values: dict) -> dict:
     try:
         result = await web_search.search(settings, "今天的重要新闻")
     except web_search.SearchError as e:
-        raise ValueError(str(e))
+        raise UIError.from_msg(e.payload()) from e
     if not result.results:
         raise ValueError("接口执行了搜索，但没有返回结果")
     return {"seconds": result.seconds, "count": len(result.results), "first": result.results[0]["title"]}
@@ -174,10 +175,12 @@ async def _test_weather(values: dict) -> dict:
     try:
         report = await get_weather.local_report(conn)
     except get_weather.WeatherError as e:
-        raise ValueError(str(e))
+        raise UIError.from_msg(e.payload()) from e
     lines = report.splitlines()
     place = lines[0].removeprefix("地点：")
-    return {"place": place, "message": f"查到的地点是 {place}。{lines[1] if len(lines) > 1 else ''}"}
+    # 第二行是设备朗读的天气播报，跟对话内容同类：原样显示
+    m = msg("查到的地点是 {place}。{weather}", place=place, weather=lines[1] if len(lines) > 1 else "")
+    return {"place": place, "message": render(m), "message_msg": m}
 
 
 TESTS = {"web_search": _test_web_search, "get_weather": _test_weather}
@@ -192,6 +195,15 @@ def _redact(message: str, values: dict, settings_id: str) -> str:
     return message
 
 
+def _redact_params(params: dict, values: dict, settings_id: str) -> dict:
+    """params（msg_params 或结果字典）里的普通字符串做 _redact()，msg 物件递归。"""
+    def one(v):
+        if isinstance(v, dict) and "msg_key" in v:
+            return {"msg_key": v["msg_key"], "msg_params": _redact_params(v.get("msg_params") or {}, values, settings_id)}
+        return _redact(v, values, settings_id) if isinstance(v, str) else v
+    return {k: one(v) for k, v in params.items()}
+
+
 async def run_test(settings_id: str, payload: dict, merged: dict) -> dict:
     if settings_id not in TESTS:
         raise KeyError(settings_id)
@@ -199,5 +211,8 @@ async def run_test(settings_id: str, payload: dict, merged: dict) -> dict:
     try:
         result = await TESTS[settings_id](values)
     except ValueError as e:
+        if isinstance(e, KeyedError):
+            # 字典直接写出来：键的字面值在原本抛出它的地方
+            raise UIError.from_msg({"msg_key": e.key, "msg_params": _redact_params(e.params, values, settings_id)}) from e
         raise ValueError(_redact(str(e), values, settings_id))
-    return {k: _redact(v, values, settings_id) if isinstance(v, str) else v for k, v in result.items()}
+    return _redact_params(result, values, settings_id)   # 字符串字段和 message_msg 的参数都要遮

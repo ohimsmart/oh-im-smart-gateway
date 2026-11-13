@@ -237,7 +237,7 @@ class AdminHandler:
         body = await self._read_json(request)
         password = str(body.get("password") or "")
         if len(password) < auth.MIN_PASSWORD_LENGTH:
-            return self._error(f"密码至少 {auth.MIN_PASSWORD_LENGTH} 位", 400)
+            return self._error(msg("密码至少 {n} 位", n=auth.MIN_PASSWORD_LENGTH), 400)
         password_hash = await self._blocking(auth.hash_password, password)
         await self._blocking(config_store.set_password_hash, password_hash, self.config_path)
         self.logger.bind(tag=TAG).info("管理后台密码已设置")
@@ -301,7 +301,8 @@ class AdminHandler:
         if result.get("failed"):
             if old and old != name:
                 await self._blocking(config_store.select_entry, section, old, merged, self.config_path)
-            result["note"] = f"切换失败：{result['error']}。已恢复为原来的 {old or '配置'}"
+            m = msg("切换失败：{error}。已恢复为原来的 {old}", error=result["error"], old=old or label("配置"))
+            result["note"], result["note_msg"] = render(m), m
             self.logger.bind(tag=TAG).warning(f"管理后台切换 {section} 为 {name} 失败，已恢复为 {old}")
             return {"ok": False, **result}
         self.logger.bind(tag=TAG).info(f"管理后台切换 {section} 为: {name}")
@@ -348,8 +349,8 @@ class AdminHandler:
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"热加载 {section} 失败: {e}")
             error = str(e).strip().rstrip("。.") or type(e).__name__
-            return {"applied": False, "failed": True, "error": error,
-                    "note": f"已保存，但加载失败：{error}。服务仍在使用原来的配置，请检查后重试"}
+            m = msg("已保存，但加载失败：{error}。服务仍在使用原来的配置，请检查后重试", error=error)
+            return {"applied": False, "failed": True, "error": error, "note": render(m), "note_msg": m}
 
     async def _refresh_speech_connections(self):
         """Connections own ASR/TTS instances; end stale sessions before the next turn."""
@@ -394,7 +395,7 @@ class AdminHandler:
             changed = await self._blocking(pages.save_call_names, body, merged, self.config_path)
         except ValueError as e:
             return self._error(e, 400)
-        note = "已保存，马上生效" if changed else "没有修改"
+        note = label("已保存，马上生效") if changed else label("没有修改")
         if changed:
             new_merged = await self._blocking(self._merged)
             self._push_config("call_names", new_merged.get("call_names") or {})
@@ -405,8 +406,8 @@ class AdminHandler:
                     (new_merged.get("selected_module") or {}).get("ASR"):
                 result = await self._apply("ASR")
                 if result.get("failed"):
-                    note += f"；热词重新加载失败：{result['error']}"
-        return self._json({"ok": True, "changed": changed, "note": note})
+                    note = msg("{note}；热词重新加载失败：{error}", note=note, error=result["error"])
+        return self._json({"ok": True, "changed": changed, "note": render(note), "note_msg": note})
 
     def _push_config(self, key: str, value) -> None:
         """设置马上生效：服务的配置和每个在线连接各自的配置副本都要更新。"""
@@ -443,7 +444,7 @@ class AdminHandler:
         try:
             bots = await self.grokbot.fetch_bots()
         except GrokBotError as e:
-            return self._error(f"读取 Bot 列表失败：{e.detail}", 400 if e.kind == ErrorKind.AUTH else 502)
+            return self._error(msg("读取 Bot 列表失败：{error}", error=e.detail), 400 if e.kind == ErrorKind.AUTH else 502)
         return self._json({"ok": True, "bots": bots, **self.grokbot.status()})
 
     async def handle_grokbot_bots(self, request: web.Request):
@@ -455,7 +456,7 @@ class AdminHandler:
             changed = await self._blocking(pages.save_grok_bots, body, merged, self.config_path)
         except ValueError as e:
             return self._error(e, 400)
-        note = "已保存，马上生效" if changed else "没有修改"
+        note = label("已保存，马上生效") if changed else label("没有修改")
         if changed:
             new_merged = await self._blocking(self._merged)
             # 新条目马上可用（呼名时按条目名创建实例），不用重启；被取消的 Bot 的称呼也一并去掉
@@ -467,10 +468,10 @@ class AdminHandler:
                     (new_merged.get("selected_module") or {}).get("ASR"):
                 result = await self._apply("ASR")
                 if result.get("failed"):
-                    note += f"；热词重新加载失败：{result['error']}"
+                    note = msg("{note}；热词重新加载失败：{error}", note=note, error=result["error"])
         if changed and any(c not in (new_merged.get("LLM") or {}) for c in changed):
-            note += "；取消的 Bot 对正连着的设备要等它重新连接才生效"
-        return self._json({"ok": True, "changed": changed, "note": note})
+            note = msg("{note}；取消的 Bot 对正连着的设备要等它重新连接才生效", note=note)
+        return self._json({"ok": True, "changed": changed, "note": render(note), "note_msg": note})
 
     async def handle_call_names_learn(self, request: web.Request):
         self._require_login(request)
@@ -536,7 +537,7 @@ class AdminHandler:
             return self._error(e, 409)
         except OSError as e:
             self.sessions_handover.unlink(missing_ok=True)
-            return self._error(f"启动更新失败：{e}", 500)
+            return self._error(msg("启动更新失败：{error}", error=str(e)), 500)
         self.logger.bind(tag=TAG).info(f"管理后台开始更新网关（来源 {request.remote}）")
         return self._json({"ok": True, "update": status})
 
@@ -548,7 +549,9 @@ class AdminHandler:
 
         entry = (merged.get("LLM") or {}).get(pages.CLAUDE_CLI_ENTRY) or {}
         cli = find_claude_cli(entry.get("cli_path") or None)
-        return {"installed": bool(cli), "path": cli or "", "version": _claude_version(cli) if cli and version else ""}
+        v = _claude_version(cli) if cli and version else None
+        return {"installed": bool(cli), "path": cli or "", "version": render(v) if v else "",
+                **({"version_msg": v} if v else {})}
 
     async def handle_llm(self, request: web.Request):
         self._require_login(request)
@@ -620,11 +623,13 @@ class AdminHandler:
         except (openai.APIConnectionError, httpx.TransportError) as e:
             # 读超时：连接建立了、请求也发出去了，是模型那边迟迟不出字，不是网络不通
             if isinstance(e, httpx.ReadTimeout) or isinstance(e.__cause__, httpx.ReadTimeout):
-                return {"ok": False, "error": f"接口连上了，但模型 {TEST_TIMEOUT['read']:.0f} 秒都没有回应。"
-                                              "可能是模型想得太久或服务太忙，稍后再试；一直这样就换个模型"}
+                m = msg("接口连上了，但模型 {seconds} 秒都没有回应。可能是模型想得太久或服务太忙，稍后再试；一直这样就换个模型",
+                        seconds=f"{TEST_TIMEOUT['read']:.0f}")
+                return {"ok": False, "error": render(m), "error_msg": m}
             return {"ok": False, "error": "连不上接口地址，请检查地址和网络；国外的服务在国内可能要走代理，或者换国内的服务"}
         except openai.APIStatusError as e:
-            return {"ok": False, "error": f"接口返回错误 {e.status_code}：{str(e.message)[:200]}"}
+            m = msg("接口返回错误 {code}：{detail}", code=e.status_code, detail=str(e.message)[:200])
+            return {"ok": False, "error": render(m), "error_msg": m}
         except Exception as e:
             return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
         return {"ok": True, "seconds": round(time.time() - started, 1), "reply": reply.strip()[:60]}
@@ -641,7 +646,7 @@ class AdminHandler:
         except ValueError as e:
             return self._error(e, 400)
         result = await self._blocking(self._test_llm, config)
-        return self._json(result) if result["ok"] else self._error(result["error"], 400)
+        return self._json(result) if result["ok"] else self._error(result.get("error_msg") or result["error"], 400)
 
     async def handle_llm_use(self, request: web.Request):
         """切换到本地 CLI 或某个 API 厂商；意图识别自动跟着切。"""
@@ -667,23 +672,29 @@ class AdminHandler:
             name = vendor["entry"]
             if not pages.describe_vendor(vendor, merged)["configured"]:
                 return None, self._error(
-                    f"{vendor['label']} 还没配置好，请先填写接口地址、模型和 API Key 并保存", 400)
+                    msg("{vendor} 还没配置好，请先填写接口地址、模型和 API Key 并保存", vendor=label(vendor["label"])), 400)
         try:
             result = await self._switch("LLM", name)
         except KeyError:
-            return None, self._error(f"配置里没有 {name}", 404)
+            return None, self._error(msg("配置里没有 {name}", name=name), 404)
         if not result["ok"]:
-            return None, self._error(result["note"], 400)
+            return None, self._error(result.get("note_msg") or result["note"], 400)
 
         merged = await self._blocking(self._merged)
         intent = await self._blocking(pages.desired_intent, merged, name, self.config_path)
         if config_store.entry_type(merged, "Intent") != intent:
+            note = result.get("note_msg") or label(result["note"])
             try:
                 intent_result = await self._switch("Intent", pages.intent_entry_name(merged, intent))
-                note = "意图识别已自动改为" + ("“不用插件”" if intent == "nointent" else "“用插件”")
-                result["note"] += "；" + (note if intent_result["ok"] else intent_result["note"])
+                if intent_result["ok"]:
+                    tail = label("意图识别已自动改为“不用插件”") if intent == "nointent" \
+                        else label("意图识别已自动改为“用插件”")
+                else:
+                    tail = intent_result.get("note_msg") or label(intent_result["note"])
+                note = msg("{note}；{tail}", note=note, tail=tail)
             except KeyError:
-                result["note"] += f"；配置里没有 {intent}，请检查意图识别"
+                note = msg("{note}；配置里没有 {intent}，请检查意图识别", note=note, intent=intent)
+            result["note"], result["note_msg"] = render(note), note
         return name, result
 
     # ---------- 本机设备接口 ----------
@@ -762,14 +773,14 @@ class AdminHandler:
         elif kind == "cli":
             name = pages.CLAUDE_CLI_ENTRY
             if name not in (merged.get("LLM") or {}):
-                return self._error(f"配置里没有 {name}", 404)
+                return self._error(msg("配置里没有 {name}", name=name), 404)
         else:
             vendor = catalog.VENDOR_BY_ID.get(str(body.get("vendor") or ""))
             if vendor is None:
                 return self._error("不支持这个厂商", 404)
             name = vendor["entry"]
             if not pages.describe_vendor(vendor, merged)["configured"]:
-                return self._error(f"{vendor['label']} 还没配置好，请先填写接口地址、模型和 API Key 并保存", 400)
+                return self._error(msg("{vendor} 还没配置好，请先填写接口地址、模型和 API Key 并保存", vendor=label(vendor["label"])), 400)
         # 后台保存过、但没设成默认的条目，运行中的配置里还是旧的（或没有）：补进去，切换时照它创建实例
         running = self.config.setdefault("LLM", {})
         if running.get(name) != merged["LLM"][name]:
@@ -792,7 +803,7 @@ class AdminHandler:
                                          {k: v for k, v in before.items() if k != "last_active"})
                 else:
                     await self._blocking(llm_router.store().forget, device)
-                return self._error(f"切换失败：{error}", 500)
+                return self._error(msg("切换失败：{error}", error=error), 500)
         self.logger.bind(tag=TAG).info(f"设备 {device} 切换模型为 {name}（只这台设备）")
         return self._json({"ok": True, "applied": True, "note": "已切换，这台设备之后都用它",
                            **await self._kiosk_models(merged, device)})
@@ -841,7 +852,7 @@ class AdminHandler:
         body = await self._read_json(request)
         text = str(body.get("text") or "").strip()
         if not text or len(text) > KIOSK_TTS_MAX_CHARS:
-            return self._error(f"text 要 1 到 {KIOSK_TTS_MAX_CHARS} 个字", 400)
+            return self._error(msg("text 要 1 到 {n} 个字", n=KIOSK_TTS_MAX_CHARS), 400)
         started = time.monotonic()
         try:
             pcm = await self._blocking(self._synthesize, text)
@@ -924,10 +935,11 @@ class AdminHandler:
         if choice == "local":
             name = catalog.LOCAL_ASR_ENTRY
             if not d["local"]["exists"]:
-                return self._error(f"配置里没有 {name} 条目，请重新运行安装脚本生成配置", 404)
+                return self._error(msg("配置里没有 {name} 条目，请重新运行安装脚本生成配置", name=name), 404)
             if not (d["local"]["model"] or {}).get("ok"):
-                return self._error(f"X-ASR 模型文件不完整（{(d['local']['model'] or {}).get('detail', '')}），"
-                                   "请重新运行安装脚本下载", 400)
+                model = d["local"]["model"] or {}
+                return self._error(msg("X-ASR 模型文件不完整（{detail}），请重新运行安装脚本下载",
+                                       detail=model.get("detail_msg") or model.get("detail", "")), 400)
         elif choice == "doubao":
             name = catalog.DOUBAO_ASR_ENTRY
             if not d["doubao"]["configured"]:
@@ -941,8 +953,8 @@ class AdminHandler:
         try:
             result = await self._switch("ASR", name)
         except KeyError:
-            return self._error(f"配置里没有 {name}", 404)
-        return self._json(result) if result["ok"] else self._error(result["note"], 400)
+            return self._error(msg("配置里没有 {name}", name=name), 404)
+        return self._json(result) if result["ok"] else self._error(result.get("note_msg") or result["note"], 400)
 
     async def handle_doubao_save(self, request: web.Request):
         self._require_login(request)
@@ -967,7 +979,7 @@ class AdminHandler:
         except ValueError as e:
             return self._error(e, 400)
         result = await check_connection(config)
-        return self._json(result) if result["ok"] else self._error(result["error"], 400)
+        return self._json(result) if result["ok"] else self._error(result.get("error_msg") or result["error"], 400)
 
     async def handle_hotwords_save(self, request: web.Request):
         """保存热词后重新加载语音识别（X-ASR 约 1 秒，豆包马上）：新连接马上用上，在线设备重连后生效。"""
@@ -1112,7 +1124,7 @@ class AdminHandler:
         if not name:
             return self._error('找不到 EdgeTTS 設定', 404)
         result = await self._switch('TTS', name)
-        return self._json(result) if result['ok'] else self._error(result['note'], 400)
+        return self._json(result) if result['ok'] else self._error(result.get('note_msg') or result['note'], 400)
 
     async def handle_tts_save(self, request: web.Request):
         self._require_login(request)
@@ -1176,20 +1188,21 @@ class AdminHandler:
                     merged = await self._blocking(self._merged)
                     name = pages.intent_entry_name(merged, "function_call")
                     if (merged.get("selected_module") or {}).get("Intent") == name:
-                        notes.append((await self._apply("Intent"))["note"])
+                        notes.append(await self._apply("Intent"))
             if pages.llm_kind(merged) != "cli":
                 await self._blocking(pages.remember_api_intent, mode, self.config_path)
                 # 设备切到非默认的 API 模型时按它选意图识别（llm_router.intent_mode），要马上用上新的选择
                 self.config.setdefault("admin", {})["api_intent"] = mode
             result = await self._switch("Intent", pages.intent_entry_name(merged, mode))
         except KeyError:
-            return self._error(f"配置里没有 {mode}", 404)
+            return self._error(msg("配置里没有 {name}", name=mode), 404)
         except ValueError as e:
             return self._error(e, 400)
         if not result["ok"]:
-            return self._error(result["note"], 400)
+            return self._error(result.get("note_msg") or result["note"], 400)
         if result["note"] == "已经在使用" and notes:
-            result["note"] = notes[-1]
+            last = notes[-1]
+            result["note"], result["note_msg"] = last["note"], last.get("note_msg") or label(last["note"])
         return self._json(result)
 
     # ---------- 插件设置 ----------
@@ -1345,7 +1358,7 @@ class AdminHandler:
         try:
             await self._send_emotion(conn, emotion)
         except Exception as e:
-            return self._error(f"发送失败：{e}", 502)
+            return self._error(msg("发送失败：{error}", error=str(e)), 502)
         return self._json({"ok": True})
 
     async def handle_emotion_test(self, request: web.Request):

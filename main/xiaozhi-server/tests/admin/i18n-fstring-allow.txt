@@ -1,0 +1,27 @@
+# 刻意保留的中文 f-string：不會顯示在後台的句子（送給大模型或設備朗讀的文字、寫進設定檔的內容），
+# 和頁面當作提示詞原文原樣顯示的 segments[].text。
+# 格式：檔名<TAB>那一行去掉前後空白的原文<TAB>原因
+get_weather.py	+ (f"，{wind}" if wind else "")	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	direction = WIND_DIRS[round((degrees or 0) / 45) % 8] + "风" if degrees is not None else "风"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	f"{_day_label(d, today)}：{weather}，{_num(column('temperature_2m_min', i))}～"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	f"{_num(column('temperature_2m_max', i))}°C" + (f"，降水概率 {prob}%" if prob is not None else "")	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	f"现在（{now:%H:%M}）：{WMO.get(cur.get('weather_code'), '未知')}，{_num(cur.get('temperature_2m'))}°C，"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	label = r["name"] + (f"（{admin}）" if admin and admin != r["name"] else "")	地名：設備朗讀的天氣播報裏的地名；後台測試只把它作為普通字串參數原樣顯示
+get_weather.py	lines = [f"地点：{place.name}"]	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	lines.append(f"空气质量：{_pm25_level(pm25)}（PM2.5 {_num(pm25)}）")	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return ("" if t.date() == now.date() else "明天") + f"{t.hour} 点"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return ActionResponse(Action.REQLLM, f"没查到天气：{e}。请简短告诉用户这次没查到，稍后再试。", None)	送給大模型：查不到天氣時給聊天模型的指示（設備朗讀）
+get_weather.py	return f"{direction} {level} 级"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return f"{prefix}{day.month}月{day.day}日 周{WEEKDAYS[day.weekday()]}"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return f"接下来 {hours} 小时：{span}可能{what}，降水概率最高 {top}%"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return f"接下来 {hours} 小时：基本不会下雨"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+get_weather.py	return parts[0] + (f"（{''.join(upper)}）" if upper else "")	地名：設備朗讀的天氣播報裏的地名；後台測試只把它作為普通字串參數原樣顯示
+get_weather.py	span = clock(first) if len(wet) == 1 else f"{clock(first)}到{clock(last)}"	設備朗讀：format_report() 的天氣播報，交給大模型念給用戶聽；後台測試原樣顯示其中一行
+pipeline.py	"text": "、".join(["直接回答（direct_answer）", *[p["label"] for p in catalog.ALWAYS_ON_PLUGINS], *plugins]),	提示詞原文：工作原理頁把工具清單當作 segments[].text 原樣顯示（送給大模型的文字）
+web_search.py	age = f"（{item['page_age']}）" if item["page_age"] else ""	送給大模型：format_for_llm() 把搜索結果交給聊天模型，不顯示在後台
+web_search.py	lines = [f"【联网搜索结果】搜索：{query}"]	送給大模型：format_for_llm() 把搜索結果交給聊天模型，不顯示在後台
+web_search.py	lines.append("回答要求：" + ("总结和原文片段对不上时，以原文片段为准；" if has_snippet else "")	送給大模型：format_for_llm() 把搜索結果交給聊天模型，不顯示在後台
+web_search.py	lines.append(f"总结：{result.summary}")	送給大模型：format_for_llm() 把搜索結果交給聊天模型，不顯示在後台
+web_search.py	reply = (f"联网搜索用不了：{e.spoken}。请用一句话告诉用户这个原因，"	送給大模型：插件出錯時給聊天模型的指示，由它講給用戶聽（設備朗讀）
+web_search.py	return time.strftime("%Y-%m-%d") + " 星期" + WEEKDAYS[time.localtime().tm_wday]	送給大模型：搜索模型系統提示裏的今天日期（_SEARCH_SYSTEM）
+web_search.py	snippet = f"：{item['snippet']}" if item["snippet"] else ""	送給大模型：format_for_llm() 把搜索結果交給聊天模型，不顯示在後台

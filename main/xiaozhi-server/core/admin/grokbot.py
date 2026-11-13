@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+from core.admin.i18n_msg import msg, render
 from core.agent.grokbot_client import Credentials, GrokBotClient, GrokBotError, LoginFlow
 
 LOGIN_TIMEOUT = 900  # 和桌面 App 的 150 次轮询差不多
@@ -103,10 +104,12 @@ class GrokBotAdmin:
                 self._result = {"ok": False, "note": "已取消", "at": time.time()}
             raise
         except GrokBotError as e:
-            self._result = {"ok": False, "note": f"登录失败：{e.detail}", "at": time.time()}
+            m = msg("登录失败：{error}", error=e.detail)
+            self._result = {"ok": False, "note": render(m), "note_msg": m, "at": time.time()}
             self._log("warning", f"Grok Bot 登录失败：{e.detail}")
         except Exception as e:  # noqa: BLE001 —— 后台任务，出错要让页面看得到
-            self._result = {"ok": False, "note": f"登录出错：{e!r}", "at": time.time()}
+            m = msg("登录出错：{error}", error=repr(e))
+            self._result = {"ok": False, "note": render(m), "note_msg": m, "at": time.time()}
             self._log("error", f"Grok Bot 登录出错：{e!r}")
 
     async def cancel_login(self) -> None:
