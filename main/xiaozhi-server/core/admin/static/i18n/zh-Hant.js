@@ -612,6 +612,7 @@ window.UI_ZH_HANT = {
   "请使用 HTTP(S) 网址；令牌请放在 headers，不要放在网址里": "請使用 HTTP(S) 網址；權杖請放在 headers，不要放在網址",
   "传输类型必须是 sse 或 streamable-http": "傳輸類型必須是 sse 或 streamable-http",
   "{field} 必须是字符串映射表": "{field} 必須是字串對應表",
+  "设置改了之后，这些已保存的值不会带过去，请重新填写或删掉：{keys}": "設定改了之後，這些已儲存的值不會帶過去，請重新填寫或刪掉：{keys}",
   "{field} 必须在 0 到 3600 秒之间": "{field} 必須介於 0 和 3600 秒之間",
   "terminate_on_close 必须是布尔值": "terminate_on_close 必須是布林值",
   "请填写服务器名称（最多 80 个字符）": "請填寫伺服器名稱（最多 80 字元）",
@@ -771,7 +772,8 @@ window.UI_ZH_HANT = {
   "鉴权失败（{status}）：Key 不对，或者没有开通这个资源。{body}": "鑑權失敗（{status}）：Key 不對，或者沒有開通這個資源。{body}",
   "；{d}没开口就提示一次进度": "；{d}沒開口就提示一次進度",
   "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制台</a>开通“豆包流式语音识别模型 2.0”后，把密钥填在这里。": "在<a href=\"https://console.volcengine.com/speech/service/10038\" target=\"_blank\" rel=\"noopener\">火山引擎控制檯</a>開通“豆包流式語音識別模型 2.0”後，把金鑰填在這裡。",
-  "模型没有配置好": "模型沒有配置好"
+  "模型没有配置好": "模型沒有配置好",
+  "已有同名的 MCP 服务器，请换一个名称，或从列表选它来修改": "已有同名的 MCP 伺服器，請換一個名稱，或從清單選它來修改"
 };
 window.UI_ZH_HANS = {
   "<button class=\"btn\" id=\"tts-edge\">切回免費 EdgeTTS</button>": "<button class=\"btn\" id=\"tts-edge\">切回免费 EdgeTTS</button>",
@@ -790,7 +792,7 @@ window.UI_ZH_HANS = {
   "已儲存，裝置重新連線後生效": "已储存，装置重新连线后生效",
   "已設定，留空保留": "已设定，留空保留",
   "找不到 EdgeTTS 設定": "找不到 EdgeTTS 设定",
-  "支援 stdio、SSE、Streamable HTTP。headers 與 env 的值不會讀回；空字串保留舊值，刪掉欄位則移除。": "支援 stdio、SSE、Streamable HTTP。headers 与 env 的值不会读回；空字串保留旧值，删掉栏位则移除。",
+  "支援 stdio、SSE、Streamable HTTP。headers 與 env 的值不會讀回；其他設定都沒改時，空字串保留舊值；刪掉欄位則移除。": "支援 stdio、SSE、Streamable HTTP。headers 与 env 的值不会读回；其他设定都没改时，空字串保留旧值；删掉栏位则移除。",
   "放棄尚未儲存的修改？": "放弃尚未储存的修改？",
   "曉佳": "晓佳",
   "曉曼": "晓曼",
@@ -856,5 +858,25 @@ window.UI_ZH_HANS = {
   "zh；留空自動偵測": "zh；留空自动侦测",
   "伺服器": "服务器",
   "新增伺服器": "新增服务器",
-  "相容 API": "兼容 API"
+  "相容 API": "兼容 API",
+  "類型": "类型",
+  "遠端網址（HTTP）": "远程网址（HTTP）",
+  "本機指令（stdio）": "本机命令（stdio）",
+  "網址": "网址",
+  "傳輸方式": "传输方式",
+  "Token（選填）": "Token（选填）",
+  "清除已儲存的 Token": "清除已储存的 Token",
+  "只填 Token 會自動加上 Bearer；要用其他格式，連同前綴一起填，例如 Basic xxx。": "只填 Token 会自动加上 Bearer；要用其他格式，连同前缀一起填，例如 Basic xxx。",
+  "除了逾時和說明，改了其他設定時，已儲存的 Token、headers 和環境變數要重新填寫或刪掉。": "除了超时和说明，改了其他设定时，已储存的 Token、headers 和环境变量要重新填写或删掉。",
+  "指令": "命令",
+  "參數（每行一個）": "参数（每行一个）",
+  "環境變數（每行一個 KEY=值）": "环境变量（每行一个 KEY=值）",
+  "環境變數的值不會讀回：其他設定都沒改時，保留 KEY= 不填值會沿用舊值；刪掉那一行則移除。": "环境变量的值不会读回：其他设定都没改时，保留 KEY= 不填值会沿用旧值；删掉那一行则移除。",
+  "這個伺服器有表單以外的欄位，儲存時原樣保留；要改請用進階 JSON。": "这个服务器有表单以外的栏位，储存时原样保留；要改请用高级 JSON。",
+  "進階：直接編輯 JSON": "高级：直接编辑 JSON",
+  "這個伺服器的設定無法用表單顯示，請用 JSON 編輯。": "这个服务器的设定无法用表单显示，请用 JSON 编辑。",
+  "請填寫網址": "请填写网址",
+  "請填寫指令": "请填写命令",
+  "環境變數每行要寫成 KEY=值，每個 KEY 只寫一次": "环境变量每行要写成 KEY=值，每个 KEY 只写一次",
+  "JSON 格式不正確": "JSON 格式不正确"
 };

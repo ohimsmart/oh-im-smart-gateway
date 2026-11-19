@@ -7,6 +7,7 @@ import re
 import tempfile
 from urllib.parse import urlsplit
 
+
 from core.admin.config_store import _WRITE_LOCK
 from core.admin.i18n_msg import UIError
 
@@ -36,6 +37,10 @@ def describe(path):
     return {'servers': servers, 'note': '儲存後，裝置重新連線時生效。API 模型需啟用工具呼叫；Claude Code 使用自己的 MCP 設定。'}
 
 
+# what the client uses to pick, start and reach the server (the rest is timeouts and descriptions)
+_REACHES_SERVER = ('command', 'args', 'env', 'url', 'transport', 'headers', 'API_ACCESS_TOKEN')
+
+
 def validate(config, old):
     if not isinstance(config, dict):
         raise UIError("服务器设置必须是 JSON 对象")
@@ -60,15 +65,34 @@ def validate(config, old):
             raise UIError("请使用 HTTP(S) 网址；令牌请放在 headers，不要放在网址里")
         if result.get('transport', 'sse') not in ('sse', 'http', 'streamable-http'):
             raise UIError("传输类型必须是 sse 或 streamable-http")
+    # A blank env value, header or token stands for the saved one. They go back only on a save that
+    # changes nothing that reaches the server: the same keys, every value blank and the rest exactly as
+    # saved. Any other save that leaves a saved secret blank is refused and names it (filling it in
+    # could hand it to another host or program, dropping it could let the gateway's own variable of
+    # that name through). Typed values are never compared with saved ones, so a save cannot confirm one.
     for field in ('env', 'headers'):
-        if field not in result:
-            continue
-        values = result[field]
+        values = result.get(field, {})
         if not isinstance(values, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in values.items()):
             raise UIError("{field} 必须是字符串映射表", field=field)
-        result[field] = {k: (v if v else (old.get(field) or {}).get(k, '')) for k, v in values.items()}
-    if result.get('API_ACCESS_TOKEN') == '':
-        result['API_ACCESS_TOKEN'] = old.get('API_ACCESS_TOKEN', '')
+    saved = {f: old.get(f) if isinstance(old.get(f), dict) else {} for f in ('env', 'headers')}
+    filled = {f: {k: v or saved[f].get(k, '') for k, v in result[f].items()} for f in saved if f in result}
+    if result.get('API_ACCESS_TOKEN') == '' and 'API_ACCESS_TOKEN' in old:
+        filled['API_ACCESS_TOKEN'] = old['API_ACCESS_TOKEN']
+    missing = object()
+    untouched = (all(v == '' for f in filled if f in saved for v in result[f].values())
+                 # (the same names in the same order: a server may read the first of two spellings)
+                 and all(list(result.get(f, {})) == list(saved[f]) and (f in result) == (f in old) for f in saved)
+                 and result.get('API_ACCESS_TOKEN', missing) == ('' if 'API_ACCESS_TOKEN' in old else missing)
+                 and all(result.get(k, missing) == old.get(k, missing)
+                         for k in _REACHES_SERVER if k not in ('env', 'headers', 'API_ACCESS_TOKEN')))
+    if untouched:
+        result.update(filled)
+    else:   # (a blank saved as blank is no secret, so it stays as it is)
+        lost = [k for f in filled if f in saved for k, v in result[f].items() if not v and saved[f].get(k)]
+        if result.get('API_ACCESS_TOKEN') == '' and old.get('API_ACCESS_TOKEN'):
+            lost.append('API_ACCESS_TOKEN')
+        if lost:
+            raise UIError("设置改了之后，这些已保存的值不会带过去，请重新填写或删掉：{keys}", keys=', '.join(lost))
     for field in ('timeout', 'sse_read_timeout'):
         if field in result:
             value = result[field]
@@ -79,7 +103,8 @@ def validate(config, old):
     return result
 
 
-def save(path, name, config=None, delete=False):
+def save(path, name, config=None, delete=False, create=False):
+    """create: the admin chose "Add server", so an existing server of that name is not replaced."""
     if not isinstance(name, str) or not re.fullmatch(r'[\w .-]{1,80}', name) or not name.strip():
         raise UIError("请填写服务器名称（最多 80 个字符）")
     path = Path(path)
@@ -88,6 +113,8 @@ def save(path, name, config=None, delete=False):
         servers = data.setdefault('mcpServers', {})
         if delete:
             servers.pop(name, None)
+        elif create and name in servers:
+            raise UIError("已有同名的 MCP 服务器，请换一个名称，或从列表选它来修改")
         else:
             servers[name] = validate(config, servers.get(name) or {})
         path.parent.mkdir(parents=True, exist_ok=True)
