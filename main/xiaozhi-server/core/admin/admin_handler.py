@@ -96,6 +96,7 @@ class AdminHandler:
                 web.get("/admin", self.handle_index),
                 web.get("/admin/", self.handle_index),
                 web.get('/admin/i18n/{asset}', self.handle_i18n_asset),
+                web.get('/admin/js/{asset}', self.handle_js_asset),
                 web.get("/admin/api/state", self.handle_state),
                 web.post("/admin/api/setup", self.handle_setup),
                 web.post("/admin/api/login", self.handle_login),
@@ -222,6 +223,11 @@ class AdminHandler:
         if asset not in ('runtime.js', 'zh-Hant.js', 'en.js'):
             raise web.HTTPNotFound()
         return web.FileResponse(STATIC_DIR / 'i18n' / asset, headers=SECURITY_HEADERS)
+
+    async def handle_js_asset(self, request):
+        if request.match_info['asset'] != 'mcp-form.js':
+            raise web.HTTPNotFound()
+        return web.FileResponse(STATIC_DIR / 'js' / 'mcp-form.js', headers=SECURITY_HEADERS)
 
     async def handle_state(self, request: web.Request):
         return self._json(
@@ -1099,7 +1105,8 @@ class AdminHandler:
         self._require_login(request)
         body = await self._read_json(request)
         try:
-            await self._blocking(mcp_settings.save, self.mcp_config_path, body.get('name'), body.get('config'), delete)
+            await self._blocking(mcp_settings.save, self.mcp_config_path, body.get('name'), body.get('config'), delete,
+                                 body.get('new') is True)
         except ValueError as e:
             return self._error(e, 400)
         return self._json({'ok': True, **await self._blocking(mcp_settings.describe, self.mcp_config_path)})

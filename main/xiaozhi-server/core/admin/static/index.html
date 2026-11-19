@@ -29,6 +29,7 @@
   a { color: var(--accent); }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
   .hidden { display: none !important; }
+  [hidden] { display: none !important; }
 
   /* ---------- 布局 ---------- */
   .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
@@ -334,6 +335,7 @@
 <script src="/admin/i18n/zh-Hant.js"></script>
 <script src="/admin/i18n/en.js"></script>
 <script src="/admin/i18n/runtime.js"></script>
+<script src="/admin/js/mcp-form.js"></script>
 <script>UII18n.init();</script>
 <script>
 "use strict";
@@ -1319,33 +1321,112 @@ async function renderMCP(root) {
       <label class="f">${UII18n.t("伺服器")}<select class="in" id="mcp-select"><option value="">${UII18n.t("新增伺服器")}</option>
         ${Object.keys(d.servers).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>
       <label class="f">${UII18n.t("名稱")}<input class="in" id="mcp-name" maxlength="80"></label>
-      <label class="f">${UII18n.t("設定 JSON")}<textarea class="in mono" id="mcp-config" rows="14" spellcheck="false"></textarea></label>
-      <p class="muted small">${UII18n.t("支援 stdio、SSE、Streamable HTTP。headers 與 env 的值不會讀回；空字串保留舊值，刪掉欄位則移除。")}
-        ${UII18n.t("本機 command 以網關帳號執行，只加入信任的伺服器。")}</p>
+      <div id="mcp-form">
+        <label class="f">${UII18n.t("類型")}<select class="in" id="mcp-kind">
+          <option value="url">${UII18n.t("遠端網址（HTTP）")}</option><option value="command">${UII18n.t("本機指令（stdio）")}</option></select></label>
+        <div id="mcp-url-fields">
+          <label class="f">${UII18n.t("網址")}<input class="in" id="mcp-url" placeholder="https://example.com/mcp"></label>
+          <label class="f">${UII18n.t("傳輸方式")}<select class="in" id="mcp-transport">
+            <option value="streamable-http">Streamable HTTP</option><option value="sse">SSE</option></select></label>
+          <label class="f">${UII18n.t("Token（選填）")}<input class="in" id="mcp-token" type="password" autocomplete="new-password"></label>
+          <p class="muted small">${UII18n.t("只填 Token 會自動加上 Bearer；要用其他格式，連同前綴一起填，例如 Basic xxx。")}</p>
+        </div>
+        <div id="mcp-command-fields">
+          <label class="f">${UII18n.t("指令")}<input class="in mono" id="mcp-command" placeholder="npx"></label>
+          <label class="f">${UII18n.t("參數（每行一個）")}<textarea class="in mono" id="mcp-args" rows="4" spellcheck="false"></textarea></label>
+          <label class="f">${UII18n.t("環境變數（每行一個 KEY=值）")}<textarea class="in mono" id="mcp-env" rows="3" spellcheck="false"></textarea></label>
+          <p class="muted small">${UII18n.t("環境變數的值不會讀回：其他設定都沒改時，保留 KEY= 不填值會沿用舊值；刪掉那一行則移除。")}</p>
+        </div>
+        <!-- (outside the URL fields: a server switched to a command still has to drop its saved token) -->
+        <label class="switch" id="mcp-token-clear-row"><input type="checkbox" id="mcp-token-clear"><span>${UII18n.t("清除已儲存的 Token")}</span></label>
+        <p class="muted small">${UII18n.t("除了逾時和說明，改了其他設定時，已儲存的 Token、headers 和環境變數要重新填寫或刪掉。")}</p>
+        <p class="muted small" id="mcp-extra">${UII18n.t("這個伺服器有表單以外的欄位，儲存時原樣保留；要改請用進階 JSON。")}</p>
+      </div>
+      <label class="switch"><input type="checkbox" id="mcp-json-mode"><span>${UII18n.t("進階：直接編輯 JSON")}</span></label>
+      <p class="muted small" id="mcp-json-only">${UII18n.t("這個伺服器的設定無法用表單顯示，請用 JSON 編輯。")}</p>
+      <div id="mcp-json">
+        <label class="f">${UII18n.t("設定 JSON")}<textarea class="in mono" id="mcp-config" rows="14" spellcheck="false"></textarea></label>
+        <p class="muted small">${UII18n.t("支援 stdio、SSE、Streamable HTTP。headers 與 env 的值不會讀回；其他設定都沒改時，空字串保留舊值；刪掉欄位則移除。")}</p>
+      </div>
+      <p class="muted small">${UII18n.t("本機 command 以網關帳號執行，只加入信任的伺服器。")}</p>
       <div class="actions"><button class="btn" id="mcp-remove">${UII18n.t("刪除")}</button><button class="btn primary" id="mcp-save">${UII18n.t("儲存")}</button></div>
     </div>`;
-  const values = () => ({name: $('mcp-name').value, config: $('mcp-config').value});
-  let changed = () => false;
-  let selectedName = '';
-  const select = () => {
-    const name = $('mcp-select').value;
-    selectedName = name;
-    $('mcp-name').value = name; $('mcp-name').readOnly = !!name;
-    $('mcp-config').value = JSON.stringify(d.servers[name] || {url: 'http://localhost:8000/mcp', transport: 'streamable-http', headers: {Authorization: ''}}, null, 2);
-    $('mcp-remove').disabled = !name;
+  const PROBLEMS = {url: () => UII18n.t("請填寫網址"), command: () => UII18n.t("請填寫指令"),
+                    env: () => UII18n.t("環境變數每行要寫成 KEY=值，每個 KEY 只寫一次"), json: () => UII18n.t("JSON 格式不正確")};
+  // base: the selected server as the page read it (saved secrets are ""). The form and the JSON
+  // editor each start from base; switching between them starts the other one from base again.
+  let base = {}, fields = McpForm.fromConfig({}), selectedName = '', changed = () => false;
+  const readFields = () => ({...fields, kind: $('mcp-kind').value, url: $('mcp-url').value,
+    transport: $('mcp-transport').value, token: $('mcp-token').value, token_clear: $('mcp-token-clear').checked,
+    command: $('mcp-command').value, args: $('mcp-args').value, env: $('mcp-env').value});
+  const showKind = () => {
+    const remote = $('mcp-kind').value === 'url';
+    $('mcp-url-fields').hidden = !remote; $('mcp-command-fields').hidden = remote;
+  };
+  const jsonMode = () => $('mcp-json-mode').checked;
+  const showMode = () => { $('mcp-form').hidden = jsonMode(); $('mcp-json').hidden = !jsonMode(); };
+  // what the editors hold (the name is tracked on its own, so switching editors keeps it)
+  const values = () => ({json: $('mcp-config').value, fields: readFields()});
+  const reset = (json) => {       // both editors from base; json: which one to show
+    const formOk = !McpForm.check(base);
+    fields = McpForm.fromConfig(formOk ? base : {});
+    $('mcp-kind').value = fields.kind; $('mcp-url').value = fields.url; $('mcp-transport').value = fields.transport;
+    $('mcp-token').value = ''; $('mcp-token').placeholder = fields.token_set ? UII18n.t("已設定，留空保留") : UII18n.t("尚未設定");
+    $('mcp-token-clear').checked = false; $('mcp-token-clear-row').hidden = !fields.token_set;
+    $('mcp-token').disabled = false;
+    $('mcp-command').value = fields.command; $('mcp-args').value = fields.args; $('mcp-env').value = fields.env;
+    $('mcp-extra').hidden = !fields.extra.length;
+    $('mcp-config').value = JSON.stringify(base, null, 2);
+    // a saved server the form cannot show (hand-edited, e.g. args as a string) opens in JSON only
+    $('mcp-json-mode').checked = json || !formOk; $('mcp-json-mode').disabled = !formOk;
+    $('mcp-json-only').hidden = formOk;
+    showKind(); showMode();
     changed = snapshot(values);
   };
+  const current = () => {          // the settings to save: {config} or {problem: translated text}
+    let r;
+    if (jsonMode()) {
+      // only the syntax is checked here; the backend's own error says what is wrong with the content
+      try { r = {config: JSON.parse($('mcp-config').value)}; } catch { r = {bad: 'json'}; }
+    } else {
+      r = McpForm.toConfig(readFields(), base);
+    }
+    return r.bad ? {problem: PROBLEMS[r.bad]()} : r;
+  };
+  const select = () => {
+    const name = $('mcp-select').value;
+    selectedName = name; base = d.servers[name] || {};
+    $('mcp-name').value = name; $('mcp-name').readOnly = !!name;
+    $('mcp-remove').disabled = !name;
+    reset(false);
+  };
+  const unsaved = () => changed() || $('mcp-name').value !== selectedName;
+  $('mcp-kind').onchange = showKind;
+  // a token typed while "clear" is on would be dropped, so the box can't hold one then
+  $('mcp-token-clear').onchange = () => {
+    $('mcp-token').disabled = $('mcp-token-clear').checked;
+    if ($('mcp-token').disabled) $('mcp-token').value = '';
+  };
+  $('mcp-json-mode').onchange = () => {
+    const toJson = jsonMode();
+    $('mcp-json-mode').checked = !toJson;
+    if (changed() && !confirm(UII18n.t("放棄尚未儲存的修改？"))) return;
+    reset(toJson);
+  };
   $('mcp-select').onchange = () => {
-    if (changed() && !confirm(UII18n.t("放棄尚未儲存的修改？"))) { $('mcp-select').value = selectedName; return; }
+    if (unsaved() && !confirm(UII18n.t("放棄尚未儲存的修改？"))) { $('mcp-select').value = selectedName; return; }
     select();
   };
   $('mcp-select').value = Object.hasOwn(d.servers, mcpSelection) ? mcpSelection : '';
-  select(); page.dirty = () => changed();
+  select(); page.dirty = () => unsaved();
   $('mcp-save').onclick = e => busy(e.target, async () => {
+    const name = $('mcp-name').value;
+    const r = current();
+    if (r.problem) { toast(r.problem, true); return; }
     try {
-      const name = $('mcp-name').value;
-      const r = await api('mcp', {name, config: JSON.parse($('mcp-config').value)});
-      mcpSelection = name; page.dirty = null; toast(UII18n.text(r.note_msg || r.note)); await openPage('mcp', true);
+      // new: the backend refuses to replace a saved server of the same name (and lose its secrets)
+      const res = await api('mcp', {name, config: r.config, new: !selectedName});
+      mcpSelection = name; page.dirty = null; toast(UII18n.text(res.note_msg || res.note)); await openPage('mcp', true);
     }
     catch (err) { toast(err.message, true); }
   });
